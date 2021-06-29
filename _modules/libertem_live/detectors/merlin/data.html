@@ -1,0 +1,788 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>libertem_live.detectors.merlin.data &#8212; LiberTEM-live 0.2.0.dev0 documentation</title>
+    <link rel="stylesheet" href="../../../../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="../../../../_static/alabaster.css" type="text/css" />
+    <script id="documentation_options" data-url_root="../../../../" src="../../../../_static/documentation_options.js"></script>
+    <script src="../../../../_static/jquery.js"></script>
+    <script src="../../../../_static/underscore.js"></script>
+    <script src="../../../../_static/doctools.js"></script>
+    <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script async="async" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <script type="text/x-mathjax-config">MathJax.Hub.Config({"tex2jax": {"inlineMath": [["$", "$"], ["\\(", "\\)"]], "processEscapes": true, "ignoreClass": "document", "processClass": "math|output_area"}})</script>
+    <link rel="shortcut icon" href="../../../../_static/favicon.ico"/>
+    <link rel="index" title="Index" href="../../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <h1>Source code for libertem_live.detectors.merlin.data</h1><div class="highlight"><pre>
+<span></span><span class="kn">import</span> <span class="nn">logging</span>
+<span class="kn">import</span> <span class="nn">socket</span>
+<span class="kn">import</span> <span class="nn">threading</span>
+<span class="kn">import</span> <span class="nn">contextlib</span>
+<span class="kn">import</span> <span class="nn">queue</span>
+<span class="kn">import</span> <span class="nn">time</span>
+
+<span class="kn">import</span> <span class="nn">numba</span>
+<span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+<span class="kn">from</span> <span class="nn">libertem.io.dataset.base.decode</span> <span class="kn">import</span> <span class="n">byteswap_2_decode</span>
+
+<span class="kn">from</span> <span class="nn">libertem_live.detectors.base.acquisition</span> <span class="kn">import</span> <span class="n">AcquisitionTimeout</span>
+
+<span class="n">logger</span> <span class="o">=</span> <span class="n">logging</span><span class="o">.</span><span class="n">getLogger</span><span class="p">(</span><span class="vm">__name__</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">get_np_dtype</span><span class="p">(</span><span class="n">dtype</span><span class="p">,</span> <span class="n">bit_depth</span><span class="p">):</span>
+    <span class="n">dtype</span> <span class="o">=</span> <span class="n">dtype</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+    <span class="n">num_bits</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">dtype</span><span class="p">[</span><span class="mi">1</span><span class="p">:])</span>
+    <span class="k">if</span> <span class="n">dtype</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;u&quot;</span><span class="p">:</span>
+        <span class="n">num_bytes</span> <span class="o">=</span> <span class="n">num_bits</span> <span class="o">//</span> <span class="mi">8</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">dtype</span><span class="p">(</span><span class="s2">&quot;&gt;u</span><span class="si">%d</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">num_bytes</span><span class="p">)</span>
+    <span class="k">elif</span> <span class="n">dtype</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="s2">&quot;r&quot;</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">bit_depth</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">dtype</span><span class="p">(</span><span class="s2">&quot;uint64&quot;</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">bit_depth</span> <span class="o">==</span> <span class="mi">6</span><span class="p">:</span>
+            <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">dtype</span><span class="p">(</span><span class="s2">&quot;uint8&quot;</span><span class="p">)</span>
+        <span class="k">elif</span> <span class="n">bit_depth</span> <span class="ow">in</span> <span class="p">(</span><span class="mi">12</span><span class="p">,</span> <span class="mi">24</span><span class="p">):</span>
+            <span class="c1"># 24bit raw is two 12bit images after another:</span>
+            <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">dtype</span><span class="p">(</span><span class="s2">&quot;uint16&quot;</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="s2">&quot;unknown bit depth: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">bit_depth</span><span class="p">)</span>
+
+
+<span class="k">def</span> <span class="nf">_parse_frame_header</span><span class="p">(</span><span class="n">raw_data</span><span class="p">):</span>
+    <span class="c1"># FIXME: like in the MIB reader, but no &#39;filesize&#39; and &#39;num_images&#39;</span>
+    <span class="c1"># keys (they can be deduced from a .mib file, but don&#39;t make sense</span>
+    <span class="c1"># in the networked case)</span>
+    <span class="n">header</span> <span class="o">=</span> <span class="n">raw_data</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s1">&#39;ascii&#39;</span><span class="p">,</span> <span class="n">errors</span><span class="o">=</span><span class="s1">&#39;ignore&#39;</span><span class="p">)</span>
+    <span class="n">parts</span> <span class="o">=</span> <span class="n">header</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;,&quot;</span><span class="p">)</span>
+    <span class="n">header_size_bytes</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">parts</span><span class="p">[</span><span class="mi">2</span><span class="p">])</span>
+    <span class="n">parts</span> <span class="o">=</span> <span class="p">[</span><span class="n">p</span>
+             <span class="k">for</span> <span class="n">p</span> <span class="ow">in</span> <span class="n">header</span><span class="p">[:</span><span class="n">header_size_bytes</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;,&quot;</span><span class="p">)</span>
+             <span class="k">if</span> <span class="s1">&#39;</span><span class="se">\x00</span><span class="s1">&#39;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">p</span><span class="p">]</span>
+    <span class="n">dtype</span> <span class="o">=</span> <span class="n">parts</span><span class="p">[</span><span class="mi">6</span><span class="p">]</span><span class="o">.</span><span class="n">lower</span><span class="p">()</span>
+    <span class="n">mib_kind</span> <span class="o">=</span> <span class="n">dtype</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">image_size</span> <span class="o">=</span> <span class="p">(</span><span class="nb">int</span><span class="p">(</span><span class="n">parts</span><span class="p">[</span><span class="mi">5</span><span class="p">]),</span> <span class="nb">int</span><span class="p">(</span><span class="n">parts</span><span class="p">[</span><span class="mi">4</span><span class="p">]))</span>
+    <span class="c1"># FIXME: There can either be threshold values for all chips, or maybe</span>
+    <span class="c1"># also none. For now, we just make use of the fact that the bit depth</span>
+    <span class="c1"># is supposed to be the last value.</span>
+    <span class="n">bits_per_pixel_raw</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">parts</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">])</span>
+    <span class="k">if</span> <span class="n">mib_kind</span> <span class="o">==</span> <span class="s2">&quot;u&quot;</span><span class="p">:</span>
+        <span class="n">bytes_per_pixel</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">parts</span><span class="p">[</span><span class="mi">6</span><span class="p">][</span><span class="mi">1</span><span class="p">:])</span> <span class="o">//</span> <span class="mi">8</span>
+        <span class="n">image_size_bytes</span> <span class="o">=</span> <span class="n">image_size</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">image_size</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">bytes_per_pixel</span>
+    <span class="k">elif</span> <span class="n">mib_kind</span> <span class="o">==</span> <span class="s2">&quot;r&quot;</span><span class="p">:</span>
+        <span class="n">size_factor</span> <span class="o">=</span> <span class="p">{</span>
+            <span class="mi">1</span><span class="p">:</span> <span class="mi">1</span><span class="o">/</span><span class="mi">8</span><span class="p">,</span>
+            <span class="mi">6</span><span class="p">:</span> <span class="mi">1</span><span class="p">,</span>
+            <span class="mi">12</span><span class="p">:</span> <span class="mi">2</span><span class="p">,</span>
+            <span class="mi">24</span><span class="p">:</span> <span class="mi">4</span><span class="p">,</span>
+        <span class="p">}[</span><span class="n">bits_per_pixel_raw</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">bits_per_pixel_raw</span> <span class="o">==</span> <span class="mi">24</span><span class="p">:</span>
+            <span class="n">image_size</span> <span class="o">=</span> <span class="p">(</span><span class="n">image_size</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="n">image_size</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">//</span> <span class="mi">2</span><span class="p">)</span>
+        <span class="n">image_size_bytes</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">image_size</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">*</span> <span class="n">image_size</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span> <span class="o">*</span> <span class="n">size_factor</span><span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span><span class="s2">&quot;unknown kind: </span><span class="si">%s</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">mib_kind</span><span class="p">)</span>
+
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s1">&#39;header_size_bytes&#39;</span><span class="p">:</span> <span class="n">header_size_bytes</span><span class="p">,</span>
+        <span class="s1">&#39;dtype&#39;</span><span class="p">:</span> <span class="n">get_np_dtype</span><span class="p">(</span><span class="n">parts</span><span class="p">[</span><span class="mi">6</span><span class="p">],</span> <span class="n">bits_per_pixel_raw</span><span class="p">),</span>
+        <span class="s1">&#39;mib_dtype&#39;</span><span class="p">:</span> <span class="n">dtype</span><span class="p">,</span>
+        <span class="s1">&#39;mib_kind&#39;</span><span class="p">:</span> <span class="n">mib_kind</span><span class="p">,</span>
+        <span class="s1">&#39;bits_per_pixel&#39;</span><span class="p">:</span> <span class="n">bits_per_pixel_raw</span><span class="p">,</span>
+        <span class="s1">&#39;image_size&#39;</span><span class="p">:</span> <span class="n">image_size</span><span class="p">,</span>
+        <span class="s1">&#39;image_size_bytes&#39;</span><span class="p">:</span> <span class="n">image_size_bytes</span><span class="p">,</span>
+        <span class="s1">&#39;sequence_first_image&#39;</span><span class="p">:</span> <span class="nb">int</span><span class="p">(</span><span class="n">parts</span><span class="p">[</span><span class="mi">1</span><span class="p">]),</span>
+    <span class="p">}</span>
+
+
+<span class="nd">@numba</span><span class="o">.</span><span class="n">njit</span><span class="p">(</span><span class="n">nogil</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">cache</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">parallel</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">decode_multi_u2</span><span class="p">(</span><span class="n">input_bytes</span><span class="p">,</span> <span class="n">out</span><span class="p">,</span> <span class="n">header_size_bytes</span><span class="p">,</span> <span class="n">num_frames</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Decode multiple &gt;u2 frames</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="n">out</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="n">num_frames</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+    <span class="n">frame_size_bytes</span> <span class="o">=</span> <span class="mi">256</span> <span class="o">*</span> <span class="mi">256</span> <span class="o">*</span> <span class="mi">2</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">numba</span><span class="o">.</span><span class="n">prange</span><span class="p">(</span><span class="n">num_frames</span><span class="p">):</span>
+        <span class="n">start_offset</span> <span class="o">=</span> <span class="n">header_size_bytes</span><span class="o">*</span><span class="p">(</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span><span class="o">+</span><span class="n">i</span><span class="o">*</span><span class="n">frame_size_bytes</span>
+        <span class="n">end_offset</span> <span class="o">=</span> <span class="n">start_offset</span> <span class="o">+</span> <span class="n">frame_size_bytes</span>
+        <span class="n">in_for_frame</span> <span class="o">=</span> <span class="n">input_bytes</span><span class="p">[</span><span class="n">start_offset</span><span class="p">:</span><span class="n">end_offset</span><span class="p">]</span>
+        <span class="n">byteswap_2_decode</span><span class="p">(</span><span class="n">in_for_frame</span><span class="p">,</span> <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">])</span>
+
+
+<span class="nd">@numba</span><span class="o">.</span><span class="n">njit</span><span class="p">(</span><span class="n">nogil</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">cache</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">parallel</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">decode_multi_u1</span><span class="p">(</span><span class="n">input_bytes</span><span class="p">,</span> <span class="n">out</span><span class="p">,</span> <span class="n">header_size_bytes</span><span class="p">,</span> <span class="n">num_frames</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Decode multiple u1 frames</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="n">out</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="n">num_frames</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+    <span class="n">frame_size_bytes</span> <span class="o">=</span> <span class="mi">256</span> <span class="o">*</span> <span class="mi">256</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">numba</span><span class="o">.</span><span class="n">prange</span><span class="p">(</span><span class="n">num_frames</span><span class="p">):</span>
+        <span class="n">start_offset</span> <span class="o">=</span> <span class="n">header_size_bytes</span><span class="o">*</span><span class="p">(</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span><span class="o">+</span><span class="n">i</span><span class="o">*</span><span class="n">frame_size_bytes</span>
+        <span class="n">end_offset</span> <span class="o">=</span> <span class="n">start_offset</span> <span class="o">+</span> <span class="n">frame_size_bytes</span>
+        <span class="n">in_for_frame</span> <span class="o">=</span> <span class="n">input_bytes</span><span class="p">[</span><span class="n">start_offset</span><span class="p">:</span><span class="n">end_offset</span><span class="p">]</span>
+        <span class="n">out</span><span class="p">[</span><span class="n">i</span><span class="p">]</span> <span class="o">=</span> <span class="n">in_for_frame</span>
+        <span class="c1"># for j in range(end_offset - start_offset):</span>
+        <span class="c1">#     out[i, j] = in_for_frame[j]</span>
+
+
+<span class="nd">@numba</span><span class="o">.</span><span class="n">jit</span><span class="p">(</span><span class="n">inline</span><span class="o">=</span><span class="s1">&#39;always&#39;</span><span class="p">,</span> <span class="n">cache</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">decode_r1_swap</span><span class="p">(</span><span class="n">inp</span><span class="p">,</span> <span class="n">out</span><span class="p">,</span> <span class="n">idx</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    RAW 1bit format: each bit is actually saved as a single bit. 64 bits</span>
+<span class="sd">    need to be unpacked together.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">for</span> <span class="n">stripe</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">inp</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">//</span> <span class="mi">8</span><span class="p">):</span>
+        <span class="k">for</span> <span class="n">byte</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">8</span><span class="p">):</span>
+            <span class="n">inp_byte</span> <span class="o">=</span> <span class="n">inp</span><span class="p">[(</span><span class="n">stripe</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="mi">8</span> <span class="o">-</span> <span class="p">(</span><span class="n">byte</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)]</span>
+            <span class="k">for</span> <span class="n">bitpos</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="mi">8</span><span class="p">):</span>
+                <span class="n">out</span><span class="p">[</span><span class="n">idx</span><span class="p">,</span> <span class="mi">64</span> <span class="o">*</span> <span class="n">stripe</span> <span class="o">+</span> <span class="mi">8</span> <span class="o">*</span> <span class="n">byte</span> <span class="o">+</span> <span class="n">bitpos</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">inp_byte</span> <span class="o">&gt;&gt;</span> <span class="n">bitpos</span><span class="p">)</span> <span class="o">&amp;</span> <span class="mi">1</span>
+
+
+<span class="nd">@numba</span><span class="o">.</span><span class="n">jit</span><span class="p">(</span><span class="n">nogil</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">cache</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">parallel</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">decode_multi_r1</span><span class="p">(</span><span class="n">input_bytes</span><span class="p">,</span> <span class="n">out</span><span class="p">,</span> <span class="n">header_size_bytes</span><span class="p">,</span> <span class="n">num_frames</span><span class="p">):</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="n">out</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="n">num_frames</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+    <span class="n">frame_size_bytes</span> <span class="o">=</span> <span class="mi">256</span> <span class="o">*</span> <span class="mi">256</span> <span class="o">//</span> <span class="mi">8</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">numba</span><span class="o">.</span><span class="n">prange</span><span class="p">(</span><span class="n">num_frames</span><span class="p">):</span>
+        <span class="n">start_offset</span> <span class="o">=</span> <span class="n">header_size_bytes</span><span class="o">*</span><span class="p">(</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span><span class="o">+</span><span class="n">i</span><span class="o">*</span><span class="n">frame_size_bytes</span>
+        <span class="n">end_offset</span> <span class="o">=</span> <span class="n">start_offset</span> <span class="o">+</span> <span class="n">frame_size_bytes</span>
+        <span class="n">in_for_frame</span> <span class="o">=</span> <span class="n">input_bytes</span><span class="p">[</span><span class="n">start_offset</span><span class="p">:</span><span class="n">end_offset</span><span class="p">]</span>
+        <span class="n">decode_r1_swap</span><span class="p">(</span><span class="n">in_for_frame</span><span class="p">,</span> <span class="n">out</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
+
+
+<span class="nd">@numba</span><span class="o">.</span><span class="n">njit</span><span class="p">(</span><span class="n">inline</span><span class="o">=</span><span class="s1">&#39;always&#39;</span><span class="p">,</span> <span class="n">cache</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">decode_r6_swap</span><span class="p">(</span><span class="n">inp</span><span class="p">,</span> <span class="n">out</span><span class="p">,</span> <span class="n">idx</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    RAW 6bit format: the pixels need to be re-ordered in groups of 8. `inp`</span>
+<span class="sd">    should have dtype uint8.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">out</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]):</span>
+        <span class="n">col</span> <span class="o">=</span> <span class="n">i</span> <span class="o">%</span> <span class="mi">8</span>
+        <span class="n">pos</span> <span class="o">=</span> <span class="n">i</span> <span class="o">//</span> <span class="mi">8</span>
+        <span class="n">out_pos</span> <span class="o">=</span> <span class="p">(</span><span class="n">pos</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="mi">8</span> <span class="o">-</span> <span class="n">col</span> <span class="o">-</span> <span class="mi">1</span>
+        <span class="n">out</span><span class="p">[</span><span class="n">idx</span><span class="p">,</span> <span class="n">out_pos</span><span class="p">]</span> <span class="o">=</span> <span class="n">inp</span><span class="p">[</span><span class="n">i</span><span class="p">]</span>
+
+
+<span class="nd">@numba</span><span class="o">.</span><span class="n">jit</span><span class="p">(</span><span class="n">nogil</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">cache</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">parallel</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">decode_multi_r6</span><span class="p">(</span><span class="n">input_bytes</span><span class="p">,</span> <span class="n">out</span><span class="p">,</span> <span class="n">header_size_bytes</span><span class="p">,</span> <span class="n">num_frames</span><span class="p">):</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="n">out</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="n">num_frames</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+    <span class="n">frame_size_bytes</span> <span class="o">=</span> <span class="mi">256</span> <span class="o">*</span> <span class="mi">256</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">numba</span><span class="o">.</span><span class="n">prange</span><span class="p">(</span><span class="n">num_frames</span><span class="p">):</span>
+        <span class="n">start_offset</span> <span class="o">=</span> <span class="n">header_size_bytes</span><span class="o">*</span><span class="p">(</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span><span class="o">+</span><span class="n">i</span><span class="o">*</span><span class="n">frame_size_bytes</span>
+        <span class="n">end_offset</span> <span class="o">=</span> <span class="n">start_offset</span> <span class="o">+</span> <span class="n">frame_size_bytes</span>
+        <span class="n">in_for_frame</span> <span class="o">=</span> <span class="n">input_bytes</span><span class="p">[</span><span class="n">start_offset</span><span class="p">:</span><span class="n">end_offset</span><span class="p">]</span>
+        <span class="n">decode_r6_swap</span><span class="p">(</span><span class="n">in_for_frame</span><span class="p">,</span> <span class="n">out</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
+
+
+<span class="nd">@numba</span><span class="o">.</span><span class="n">njit</span><span class="p">(</span><span class="n">inline</span><span class="o">=</span><span class="s1">&#39;always&#39;</span><span class="p">,</span> <span class="n">cache</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">decode_r12_swap</span><span class="p">(</span><span class="n">inp</span><span class="p">,</span> <span class="n">out</span><span class="p">,</span> <span class="n">idx</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    RAW 12bit format: the pixels need to be re-ordered in groups of 4. `inp`</span>
+<span class="sd">    should be an uint8 view on big endian 12bit data (&quot;&gt;u2&quot;)</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">out</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]):</span>
+        <span class="n">col</span> <span class="o">=</span> <span class="n">i</span> <span class="o">%</span> <span class="mi">4</span>
+        <span class="n">pos</span> <span class="o">=</span> <span class="n">i</span> <span class="o">//</span> <span class="mi">4</span>
+        <span class="n">out_pos</span> <span class="o">=</span> <span class="p">(</span><span class="n">pos</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="mi">4</span> <span class="o">-</span> <span class="n">col</span> <span class="o">-</span> <span class="mi">1</span>
+        <span class="n">out</span><span class="p">[</span><span class="n">idx</span><span class="p">,</span> <span class="n">out_pos</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span><span class="n">inp</span><span class="p">[</span><span class="n">i</span> <span class="o">*</span> <span class="mi">2</span><span class="p">]</span> <span class="o">&lt;&lt;</span> <span class="mi">8</span><span class="p">)</span> <span class="o">+</span> <span class="p">(</span><span class="n">inp</span><span class="p">[</span><span class="n">i</span> <span class="o">*</span> <span class="mi">2</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span> <span class="o">&lt;&lt;</span> <span class="mi">0</span><span class="p">)</span>
+
+
+<span class="nd">@numba</span><span class="o">.</span><span class="n">jit</span><span class="p">(</span><span class="n">nogil</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">cache</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">parallel</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">decode_multi_r12</span><span class="p">(</span><span class="n">input_bytes</span><span class="p">,</span> <span class="n">out</span><span class="p">,</span> <span class="n">header_size_bytes</span><span class="p">,</span> <span class="n">num_frames</span><span class="p">):</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="n">out</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="n">num_frames</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+    <span class="n">frame_size_bytes</span> <span class="o">=</span> <span class="mi">2</span> <span class="o">*</span> <span class="mi">256</span> <span class="o">*</span> <span class="mi">256</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="n">numba</span><span class="o">.</span><span class="n">prange</span><span class="p">(</span><span class="n">num_frames</span><span class="p">):</span>
+        <span class="n">start_offset</span> <span class="o">=</span> <span class="n">header_size_bytes</span><span class="o">*</span><span class="p">(</span><span class="n">i</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span><span class="o">+</span><span class="n">i</span><span class="o">*</span><span class="n">frame_size_bytes</span>
+        <span class="n">end_offset</span> <span class="o">=</span> <span class="n">start_offset</span> <span class="o">+</span> <span class="n">frame_size_bytes</span>
+        <span class="n">in_for_frame</span> <span class="o">=</span> <span class="n">input_bytes</span><span class="p">[</span><span class="n">start_offset</span><span class="p">:</span><span class="n">end_offset</span><span class="p">]</span>
+        <span class="n">decode_r12_swap</span><span class="p">(</span><span class="n">in_for_frame</span><span class="p">,</span> <span class="n">out</span><span class="p">,</span> <span class="n">i</span><span class="p">)</span>
+
+
+<span class="nd">@numba</span><span class="o">.</span><span class="n">njit</span><span class="p">(</span><span class="n">inline</span><span class="o">=</span><span class="s1">&#39;always&#39;</span><span class="p">,</span> <span class="n">cache</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="k">def</span> <span class="nf">decode_r24_swap</span><span class="p">(</span><span class="n">inp</span><span class="p">,</span> <span class="n">out</span><span class="p">,</span> <span class="n">idx</span><span class="p">):</span>
+    <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    RAW 24bit format: a single 24bit consists of two frames that are encoded</span>
+<span class="sd">    like the RAW 12bit format, the first contains the most significant bits.</span>
+
+<span class="sd">    So after a frame header, there are (512, 256) &gt;u2 values, which then</span>
+<span class="sd">    need to be shuffled like in `decode_r12_swap`.</span>
+
+<span class="sd">    This decoder function only works together with mib_r24_get_read_ranges</span>
+<span class="sd">    which generates twice as many read ranges than normally.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">out</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">1</span><span class="p">]):</span>
+        <span class="n">col</span> <span class="o">=</span> <span class="n">i</span> <span class="o">%</span> <span class="mi">4</span>
+        <span class="n">pos</span> <span class="o">=</span> <span class="n">i</span> <span class="o">//</span> <span class="mi">4</span>
+        <span class="n">out_pos</span> <span class="o">=</span> <span class="p">(</span><span class="n">pos</span> <span class="o">+</span> <span class="mi">1</span><span class="p">)</span> <span class="o">*</span> <span class="mi">4</span> <span class="o">-</span> <span class="n">col</span> <span class="o">-</span> <span class="mi">1</span>
+        <span class="n">out_val</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">uint32</span><span class="p">((</span><span class="n">inp</span><span class="p">[</span><span class="n">i</span> <span class="o">*</span> <span class="mi">2</span><span class="p">]</span> <span class="o">&lt;&lt;</span> <span class="mi">8</span><span class="p">)</span> <span class="o">+</span> <span class="p">(</span><span class="n">inp</span><span class="p">[</span><span class="n">i</span> <span class="o">*</span> <span class="mi">2</span> <span class="o">+</span> <span class="mi">1</span><span class="p">]</span> <span class="o">&lt;&lt;</span> <span class="mi">0</span><span class="p">))</span>
+        <span class="k">if</span> <span class="n">idx</span> <span class="o">%</span> <span class="mi">2</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>  <span class="c1"># from first frame: most significant bits</span>
+            <span class="n">out_val</span> <span class="o">=</span> <span class="n">out_val</span> <span class="o">&lt;&lt;</span> <span class="mi">12</span>
+        <span class="n">out</span><span class="p">[</span><span class="n">idx</span> <span class="o">//</span> <span class="mi">2</span><span class="p">,</span> <span class="n">out_pos</span><span class="p">]</span> <span class="o">+=</span> <span class="n">out_val</span>
+
+
+<span class="k">class</span> <span class="nc">MerlinDataSocket</span><span class="p">:</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">host</span><span class="o">=</span><span class="s1">&#39;127.0.0.1&#39;</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="mi">6342</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="mf">1.0</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_host</span> <span class="o">=</span> <span class="n">host</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_port</span> <span class="o">=</span> <span class="n">port</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_timeout</span> <span class="o">=</span> <span class="n">timeout</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_socket</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_acquisition_header</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_is_connected</span> <span class="o">=</span> <span class="kc">False</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_read_lock</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Lock</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_frame_counter</span> <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="k">def</span> <span class="nf">connect</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_socket</span> <span class="o">=</span> <span class="n">socket</span><span class="o">.</span><span class="n">socket</span><span class="p">(</span><span class="n">socket</span><span class="o">.</span><span class="n">AF_INET</span><span class="p">,</span> <span class="n">socket</span><span class="o">.</span><span class="n">SOCK_STREAM</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_socket</span><span class="o">.</span><span class="n">connect</span><span class="p">((</span><span class="bp">self</span><span class="o">.</span><span class="n">_host</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_port</span><span class="p">))</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_socket</span><span class="o">.</span><span class="n">setsockopt</span><span class="p">(</span><span class="n">socket</span><span class="o">.</span><span class="n">SOL_SOCKET</span><span class="p">,</span> <span class="n">socket</span><span class="o">.</span><span class="n">SO_REUSEADDR</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_socket</span><span class="o">.</span><span class="n">settimeout</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_timeout</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_is_connected</span> <span class="o">=</span> <span class="kc">True</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_frame_counter</span> <span class="o">=</span> <span class="mi">0</span>
+
+    <span class="k">def</span> <span class="nf">is_connected</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_is_connected</span>
+
+    <span class="k">def</span> <span class="nf">read_unbuffered</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">length</span><span class="p">,</span> <span class="n">cancel_timeout</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        read exactly length bytes from the socket</span>
+
+<span class="sd">        note: efficiency to be evaluated</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_connected</span><span class="p">():</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;can&#39;t read without connection&quot;</span><span class="p">)</span>
+        <span class="n">total_bytes_read</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">buf</span> <span class="o">=</span> <span class="nb">bytearray</span><span class="p">(</span><span class="mi">16</span><span class="o">*</span><span class="mi">1024</span><span class="o">*</span><span class="mi">1024</span><span class="p">)</span>
+        <span class="k">assert</span> <span class="n">length</span> <span class="o">&lt;</span> <span class="nb">len</span><span class="p">(</span><span class="n">buf</span><span class="p">)</span>
+        <span class="n">view</span> <span class="o">=</span> <span class="nb">memoryview</span><span class="p">(</span><span class="n">buf</span><span class="p">)</span>
+        <span class="n">start_time</span> <span class="o">=</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span>
+        <span class="k">while</span> <span class="n">total_bytes_read</span> <span class="o">&lt;</span> <span class="n">length</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">bytes_read</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_socket</span><span class="o">.</span><span class="n">recv_into</span><span class="p">(</span>
+                    <span class="n">view</span><span class="p">[</span><span class="n">total_bytes_read</span><span class="p">:],</span>
+                    <span class="n">length</span> <span class="o">-</span> <span class="n">total_bytes_read</span>
+                <span class="p">)</span>
+                <span class="k">if</span> <span class="n">bytes_read</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">EOFError</span><span class="p">(</span><span class="s2">&quot;EOF&quot;</span><span class="p">)</span>
+                <span class="n">total_bytes_read</span> <span class="o">+=</span> <span class="n">bytes_read</span>
+            <span class="k">except</span> <span class="n">socket</span><span class="o">.</span><span class="n">timeout</span><span class="p">:</span>
+                <span class="k">pass</span>
+            <span class="k">if</span> <span class="n">cancel_timeout</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">time</span><span class="o">.</span><span class="n">time</span><span class="p">()</span> <span class="o">-</span> <span class="n">start_time</span> <span class="o">&gt;</span> <span class="n">cancel_timeout</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="n">AcquisitionTimeout</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;Timeout after reading </span><span class="si">{</span><span class="n">total_bytes_read</span><span class="si">}</span><span class="s2"> bytes.&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">buf</span><span class="p">[:</span><span class="n">total_bytes_read</span><span class="p">]</span>
+
+    <span class="k">def</span> <span class="nf">read_into</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">out</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        read exactly len(out) bytes from the socket</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_connected</span><span class="p">():</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span><span class="s2">&quot;can&#39;t read without connection&quot;</span><span class="p">)</span>
+        <span class="n">length</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>
+        <span class="n">total_bytes_read</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="n">view</span> <span class="o">=</span> <span class="nb">memoryview</span><span class="p">(</span><span class="n">out</span><span class="p">)</span>
+        <span class="k">while</span> <span class="n">total_bytes_read</span> <span class="o">&lt;</span> <span class="n">length</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">bytes_read</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_socket</span><span class="o">.</span><span class="n">recv_into</span><span class="p">(</span>
+                    <span class="n">view</span><span class="p">[</span><span class="n">total_bytes_read</span><span class="p">:],</span>
+                    <span class="n">length</span> <span class="o">-</span> <span class="n">total_bytes_read</span>
+                <span class="p">)</span>
+            <span class="k">except</span> <span class="n">socket</span><span class="o">.</span><span class="n">timeout</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">total_bytes_read</span>
+            <span class="k">if</span> <span class="n">bytes_read</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>  <span class="c1"># EOF</span>
+                <span class="k">return</span> <span class="n">total_bytes_read</span>
+            <span class="n">total_bytes_read</span> <span class="o">+=</span> <span class="n">bytes_read</span>
+        <span class="k">return</span> <span class="n">total_bytes_read</span>
+
+    <span class="k">def</span> <span class="nf">read_mpx_length</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cancel_timeout</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="c1"># structure: MPX,&lt;ten digits&gt;,&lt;header&gt;</span>
+        <span class="n">hdr</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">read_unbuffered</span><span class="p">(</span><span class="mi">15</span><span class="p">,</span> <span class="n">cancel_timeout</span><span class="o">=</span><span class="n">cancel_timeout</span><span class="p">)</span>
+        <span class="c1"># logger.debug(&quot;MPX prefix: %r&quot;, hdr)</span>
+        <span class="k">assert</span> <span class="n">hdr</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="sa">b</span><span class="s1">&#39;MPX,&#39;</span><span class="p">),</span> <span class="s2">&quot;Should start with MPX, first bytes are </span><span class="si">%r</span><span class="s2">&quot;</span> <span class="o">%</span> <span class="n">hdr</span><span class="p">[:</span><span class="mi">16</span><span class="p">]</span>
+        <span class="n">parts</span> <span class="o">=</span> <span class="n">hdr</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="sa">b</span><span class="s1">&#39;,&#39;</span><span class="p">)</span>
+        <span class="n">length</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">parts</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+        <span class="c1"># we already consumed the comma, which seems to be part of the</span>
+        <span class="c1"># length calculation, that&#39;s why we substract 1 here:</span>
+        <span class="k">return</span> <span class="n">length</span> <span class="o">-</span> <span class="mi">1</span>
+
+    <span class="k">def</span> <span class="nf">_read_acquisition_header</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cancel_timeout</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="c1"># assumption: when we connect, the connection is idle</span>
+        <span class="c1"># so the first thing we will get is the acquisition header.</span>
+        <span class="c1"># we read it in an inefficient way, but the header is small,</span>
+        <span class="c1"># so this should be ok:</span>
+        <span class="n">length</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">read_mpx_length</span><span class="p">(</span><span class="n">cancel_timeout</span><span class="o">=</span><span class="n">cancel_timeout</span><span class="p">)</span>
+        <span class="n">header</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">read_unbuffered</span><span class="p">(</span><span class="n">length</span><span class="p">)</span>
+        <span class="n">header</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_parse_acq_header</span><span class="p">(</span><span class="n">header</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_acquisition_header</span> <span class="o">=</span> <span class="n">header</span>
+        <span class="k">return</span> <span class="n">header</span>
+
+    <span class="k">def</span> <span class="nf">get_acquisition_header</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_acquisition_header</span>
+
+    <span class="k">def</span> <span class="nf">read_headers</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">cancel_timeout</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Read acquisition header, and peek first frame header</span>
+
+<span class="sd">        The acquisition header is consumed, the first frame header will</span>
+<span class="sd">        be kept in the socket queue, and can be read regularly afterwards.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_acquisition_header</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_read_acquisition_header</span><span class="p">(</span><span class="n">cancel_timeout</span><span class="o">=</span><span class="n">cancel_timeout</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_first_frame_header</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_peek_frame_header</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_frame_counter</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_first_frame_header</span><span class="p">[</span><span class="s1">&#39;sequence_first_image&#39;</span><span class="p">]</span> <span class="o">-</span> <span class="mi">1</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;got headers; frame offset = </span><span class="si">{</span><span class="bp">self</span><span class="o">.</span><span class="n">_frame_counter</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_acquisition_header</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">_first_frame_header</span>
+
+    <span class="k">def</span> <span class="nf">get_input_buffer</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">num_frames</span><span class="p">):</span>
+        <span class="n">header_size</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_first_frame_header</span><span class="p">[</span><span class="s1">&#39;header_size_bytes&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="mi">15</span>
+        <span class="n">image_size</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_first_frame_header</span><span class="p">[</span><span class="s1">&#39;image_size_bytes&#39;</span><span class="p">])</span>
+        <span class="n">read_size</span> <span class="o">=</span> <span class="n">num_frames</span><span class="o">*</span><span class="p">(</span><span class="n">header_size</span> <span class="o">+</span> <span class="n">image_size</span><span class="p">)</span>
+        <span class="n">input_bytes</span> <span class="o">=</span> <span class="nb">bytearray</span><span class="p">(</span><span class="n">read_size</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">input_bytes</span>
+
+    <span class="k">def</span> <span class="nf">get_out_buffer</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">num_frames</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">((</span><span class="n">num_frames</span><span class="p">,</span> <span class="mi">256</span><span class="p">,</span> <span class="mi">256</span><span class="p">),</span> <span class="n">dtype</span><span class="o">=</span><span class="n">dtype</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">read_multi_frames</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">out</span><span class="p">,</span> <span class="n">input_buffer</span><span class="p">,</span> <span class="n">num_frames</span><span class="o">=</span><span class="mi">32</span><span class="p">,</span> <span class="n">read_upto_frame</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=-</span><span class="mi">1</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Returns `False` on timeout, `True` in case we are done and don&#39;t need to</span>
+<span class="sd">        read any more frames (according to `read_upto_frame`), or a tuple</span>
+<span class="sd">        `(buffer, frame_idx_start, frame_idx_end)`</span>
+
+<span class="sd">        On EOF or timeout, can read less than `num_frames`. In that case, `buffer` is sliced</span>
+<span class="sd">        to only contain decoded data. `out` will not be fully overwritten in this case</span>
+<span class="sd">        and can contain garbage at the end.</span>
+
+<span class="sd">        `read_upto_frame` can be used to only read up to a total number of frames.</span>
+<span class="sd">        Once this number is reached, we behave the same way as if we had reached EOF.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">out_flat</span> <span class="o">=</span> <span class="n">out</span><span class="o">.</span><span class="n">reshape</span><span class="p">((</span><span class="n">num_frames</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">))</span>
+        <span class="n">header_size</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_first_frame_header</span><span class="p">[</span><span class="s1">&#39;header_size_bytes&#39;</span><span class="p">])</span> <span class="o">+</span> <span class="mi">15</span>
+        <span class="n">bytes_per_frame</span> <span class="o">=</span> <span class="n">header_size</span> <span class="o">+</span> <span class="bp">self</span><span class="o">.</span><span class="n">_first_frame_header</span><span class="p">[</span><span class="s1">&#39;image_size_bytes&#39;</span><span class="p">]</span>
+
+        <span class="n">lock_success</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_read_lock</span><span class="o">.</span><span class="n">acquire</span><span class="p">(</span><span class="n">timeout</span><span class="o">=</span><span class="n">timeout</span><span class="p">)</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="n">lock_success</span><span class="p">:</span>
+            <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">input_buffer</span> <span class="o">=</span> <span class="nb">memoryview</span><span class="p">(</span><span class="n">input_buffer</span><span class="p">)</span>
+            <span class="k">if</span> <span class="n">read_upto_frame</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="n">num_frames</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="n">num_frames</span><span class="p">,</span> <span class="n">read_upto_frame</span> <span class="o">-</span> <span class="bp">self</span><span class="o">.</span><span class="n">_frame_counter</span><span class="p">)</span>
+                <span class="n">input_buffer</span> <span class="o">=</span> <span class="n">input_buffer</span><span class="p">[:</span><span class="n">num_frames</span> <span class="o">*</span> <span class="n">bytes_per_frame</span><span class="p">]</span>
+                <span class="k">if</span> <span class="n">num_frames</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="k">return</span> <span class="kc">True</span>  <span class="c1"># we are done.</span>
+            <span class="n">bytes_read</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">read_into</span><span class="p">(</span><span class="n">input_buffer</span><span class="p">)</span>
+            <span class="n">frames_read</span> <span class="o">=</span> <span class="n">bytes_read</span> <span class="o">//</span> <span class="n">bytes_per_frame</span>
+            <span class="k">if</span> <span class="n">bytes_read</span> <span class="o">%</span> <span class="n">bytes_per_frame</span> <span class="o">!=</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">EOFError</span><span class="p">(</span>
+                    <span class="s2">&quot;input data stream truncated (</span><span class="si">%d</span><span class="s2">,</span><span class="si">%d</span><span class="s2">)&quot;</span> <span class="o">%</span> <span class="p">(</span>
+                        <span class="n">bytes_read</span><span class="p">,</span> <span class="n">bytes_per_frame</span>
+                    <span class="p">)</span>
+                <span class="p">)</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_frame_counter</span> <span class="o">+=</span> <span class="n">frames_read</span>
+            <span class="c1"># save frame_counter while we hold the lock:</span>
+            <span class="n">frame_counter</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_frame_counter</span>
+            <span class="k">if</span> <span class="n">bytes_read</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="c1"># timeout or EOF without any data read:</span>
+                <span class="k">return</span> <span class="kc">False</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_read_lock</span><span class="o">.</span><span class="n">release</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="n">input_buffer</span><span class="p">[:</span><span class="n">bytes_read</span><span class="p">],</span> <span class="n">out_flat</span><span class="p">[:</span><span class="n">frames_read</span><span class="p">],</span> <span class="n">header_size</span><span class="p">,</span> <span class="n">frames_read</span><span class="p">)</span>
+        <span class="k">return</span> <span class="p">(</span><span class="n">out</span><span class="p">[:</span><span class="n">frames_read</span><span class="p">],</span> <span class="n">frame_counter</span> <span class="o">-</span> <span class="n">frames_read</span><span class="p">,</span> <span class="n">frame_counter</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">decode</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">input_buffer</span><span class="p">,</span> <span class="n">out_flat</span><span class="p">,</span> <span class="n">header_size</span><span class="p">,</span> <span class="n">num_frames</span><span class="p">):</span>
+        <span class="n">fh</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_first_frame_header</span>
+        <span class="n">itemsize</span> <span class="o">=</span> <span class="n">fh</span><span class="p">[</span><span class="s1">&#39;dtype&#39;</span><span class="p">]</span><span class="o">.</span><span class="n">itemsize</span>
+        <span class="n">bits_pp</span> <span class="o">=</span> <span class="n">fh</span><span class="p">[</span><span class="s1">&#39;bits_per_pixel&#39;</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">fh</span><span class="p">[</span><span class="s1">&#39;mib_kind&#39;</span><span class="p">]</span> <span class="o">==</span> <span class="s1">&#39;u&#39;</span><span class="p">:</span>
+            <span class="c1"># binary:</span>
+            <span class="k">if</span> <span class="n">itemsize</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">fn</span> <span class="o">=</span> <span class="n">decode_multi_u1</span>
+            <span class="k">elif</span> <span class="n">itemsize</span> <span class="o">==</span> <span class="mi">2</span><span class="p">:</span>
+                <span class="n">fn</span> <span class="o">=</span> <span class="n">decode_multi_u2</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;itemsize </span><span class="si">%d</span><span class="s2"> currently not supported&quot;</span> <span class="o">%</span> <span class="n">itemsize</span><span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># raw binary:</span>
+            <span class="k">if</span> <span class="n">bits_pp</span> <span class="o">==</span> <span class="mi">1</span><span class="p">:</span>
+                <span class="n">fn</span> <span class="o">=</span> <span class="n">decode_multi_r1</span>
+            <span class="k">elif</span> <span class="n">bits_pp</span> <span class="o">==</span> <span class="mi">6</span><span class="p">:</span>
+                <span class="n">fn</span> <span class="o">=</span> <span class="n">decode_multi_r6</span>
+            <span class="k">elif</span> <span class="n">bits_pp</span> <span class="o">==</span> <span class="mi">12</span><span class="p">:</span>
+                <span class="n">fn</span> <span class="o">=</span> <span class="n">decode_multi_r12</span>
+            <span class="k">else</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;can&#39;t handle </span><span class="si">%d</span><span class="s2"> bits per pixel yet&quot;</span> <span class="o">%</span> <span class="n">bits_pp</span><span class="p">)</span>
+        <span class="n">input_arr</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">frombuffer</span><span class="p">(</span><span class="n">input_buffer</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">uint8</span><span class="p">)</span>
+        <span class="n">fn</span><span class="p">(</span><span class="n">input_arr</span><span class="p">,</span> <span class="n">out_flat</span><span class="p">[:</span><span class="n">num_frames</span><span class="p">],</span> <span class="n">header_size</span><span class="p">,</span> <span class="n">num_frames</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">_peek_frame_header</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="c1"># first, peek only the MPX header part:</span>
+        <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">buf</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_socket</span><span class="o">.</span><span class="n">recv</span><span class="p">(</span><span class="mi">15</span><span class="p">,</span> <span class="n">socket</span><span class="o">.</span><span class="n">MSG_PEEK</span><span class="p">)</span>
+                <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">buf</span><span class="p">)</span> <span class="o">==</span> <span class="mi">15</span>
+                <span class="k">break</span>
+            <span class="k">except</span> <span class="n">socket</span><span class="o">.</span><span class="n">timeout</span><span class="p">:</span>
+                <span class="k">pass</span>
+        <span class="k">assert</span> <span class="nb">len</span><span class="p">(</span><span class="n">buf</span><span class="p">)</span> <span class="o">==</span> <span class="mi">15</span>
+        <span class="n">parts</span> <span class="o">=</span> <span class="n">buf</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="sa">b</span><span class="s1">&#39;,&#39;</span><span class="p">)</span>
+        <span class="n">length</span> <span class="o">=</span> <span class="nb">int</span><span class="p">(</span><span class="n">parts</span><span class="p">[</span><span class="mi">1</span><span class="p">])</span>
+
+        <span class="c1"># now, peek enough to read the frame header:</span>
+        <span class="n">buf</span> <span class="o">=</span> <span class="sa">b</span><span class="s1">&#39;&#39;</span>
+        <span class="n">peek_length</span> <span class="o">=</span> <span class="nb">min</span><span class="p">(</span><span class="mi">15</span> <span class="o">+</span> <span class="n">length</span><span class="p">,</span> <span class="mi">4096</span><span class="p">)</span>
+        <span class="k">while</span> <span class="nb">len</span><span class="p">(</span><span class="n">buf</span><span class="p">)</span> <span class="o">&lt;</span> <span class="n">peek_length</span><span class="p">:</span>
+            <span class="c1"># need to repeat, as the first peek can fail to give the full length message:</span>
+            <span class="n">buf</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_socket</span><span class="o">.</span><span class="n">recv</span><span class="p">(</span><span class="n">peek_length</span><span class="p">,</span> <span class="n">socket</span><span class="o">.</span><span class="n">MSG_PEEK</span><span class="p">)</span>
+        <span class="n">frame_header</span> <span class="o">=</span> <span class="n">_parse_frame_header</span><span class="p">(</span><span class="n">buf</span><span class="p">[</span><span class="mi">15</span><span class="p">:])</span>
+        <span class="k">return</span> <span class="n">frame_header</span>
+
+    <span class="k">def</span> <span class="nf">_parse_acq_header</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">header</span><span class="p">):</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="p">{}</span>
+        <span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">header</span><span class="o">.</span><span class="n">decode</span><span class="p">(</span><span class="s2">&quot;latin1&quot;</span><span class="p">)</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s1">&#39;</span><span class="se">\n</span><span class="s1">&#39;</span><span class="p">):</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="k">if</span> <span class="n">line</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;HDR&quot;</span><span class="p">)</span> <span class="ow">or</span> <span class="n">line</span><span class="o">.</span><span class="n">startswith</span><span class="p">(</span><span class="s2">&quot;End</span><span class="se">\t</span><span class="s2">&quot;</span><span class="p">):</span>
+                    <span class="k">continue</span>
+                <span class="n">k</span><span class="p">,</span> <span class="n">v</span> <span class="o">=</span> <span class="n">line</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\t</span><span class="s2">&quot;</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+                <span class="n">k</span> <span class="o">=</span> <span class="n">k</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s1">&#39;:&#39;</span><span class="p">)</span>
+                <span class="n">v</span> <span class="o">=</span> <span class="n">v</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\r</span><span class="s2">&quot;</span><span class="p">)</span>
+                <span class="n">v</span> <span class="o">=</span> <span class="n">v</span><span class="o">.</span><span class="n">rstrip</span><span class="p">(</span><span class="s2">&quot;</span><span class="se">\n</span><span class="s2">&quot;</span><span class="p">)</span>
+            <span class="k">except</span> <span class="ne">ValueError</span><span class="p">:</span>
+                <span class="n">logger</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span><span class="s2">&quot;error while parsing line </span><span class="si">%r</span><span class="s2">&quot;</span><span class="p">,</span> <span class="n">line</span><span class="p">)</span>
+                <span class="k">raise</span>
+            <span class="n">result</span><span class="p">[</span><span class="n">k</span><span class="p">]</span> <span class="o">=</span> <span class="n">v</span>
+        <span class="k">return</span> <span class="n">result</span>
+
+    <span class="k">def</span> <span class="nf">close</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_socket</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_is_connected</span> <span class="o">=</span> <span class="kc">False</span>
+
+    <span class="k">def</span> <span class="fm">__enter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">connect</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="fm">__exit__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="nb">type</span><span class="p">,</span> <span class="n">value</span><span class="p">,</span> <span class="n">traceback</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">close</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">drain</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        read data from the data socket until we hit the timeout; returns</span>
+<span class="sd">        the number of bytes drained</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">bytes_read</span> <span class="o">=</span> <span class="mi">0</span>
+        <span class="c1"># read from the socket until we hit the timeout:</span>
+        <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">data</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_socket</span><span class="o">.</span><span class="n">recv</span><span class="p">(</span><span class="mi">4096</span><span class="p">)</span>
+                <span class="n">bytes_read</span> <span class="o">+=</span> <span class="nb">len</span><span class="p">(</span><span class="n">data</span><span class="p">)</span>
+            <span class="k">except</span> <span class="n">socket</span><span class="o">.</span><span class="n">timeout</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">bytes_read</span>
+
+
+<span class="k">class</span> <span class="nc">ResultWrap</span><span class="p">:</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">start</span><span class="p">,</span> <span class="n">stop</span><span class="p">,</span> <span class="n">buf</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_consumed</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Event</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">start</span> <span class="o">=</span> <span class="n">start</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">stop</span> <span class="o">=</span> <span class="n">stop</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">buf</span> <span class="o">=</span> <span class="n">buf</span><span class="p">[:</span><span class="n">stop</span> <span class="o">-</span> <span class="n">start</span><span class="p">]</span>
+        <span class="k">assert</span> <span class="n">buf</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span> <span class="o">==</span> <span class="n">stop</span> <span class="o">-</span> <span class="n">start</span>
+
+    <span class="k">def</span> <span class="nf">is_released</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">timeout</span><span class="p">):</span>
+        <span class="c1"># called from `ReaderThread` - after data is consumed,</span>
+        <span class="c1"># we are free to reuse our buffer</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_consumed</span><span class="o">.</span><span class="n">wait</span><span class="p">(</span><span class="n">timeout</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="nf">release</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_consumed</span><span class="o">.</span><span class="n">set</span><span class="p">()</span>
+
+
+<span class="c1"># FIXME: use ErrThreadMixin and maybe_raise in the pool</span>
+<span class="k">class</span> <span class="nc">ReaderThread</span><span class="p">(</span><span class="n">threading</span><span class="o">.</span><span class="n">Thread</span><span class="p">):</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">backend</span><span class="p">,</span> <span class="n">out_queue</span><span class="p">,</span> <span class="n">chunk_size</span><span class="p">,</span> <span class="n">default_timeout</span><span class="o">=</span><span class="mf">0.2</span><span class="p">,</span> <span class="n">read_dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span>
+                 <span class="n">read_upto_frame</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span><span class="n">name</span><span class="o">=</span><span class="s1">&#39;ReaderThread&#39;</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_stop_event</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Event</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_eof_event</span> <span class="o">=</span> <span class="n">threading</span><span class="o">.</span><span class="n">Event</span><span class="p">()</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_backend</span> <span class="o">=</span> <span class="n">backend</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_chunk_size</span> <span class="o">=</span> <span class="n">chunk_size</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_out_queue</span> <span class="o">=</span> <span class="n">out_queue</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_default_timeout</span> <span class="o">=</span> <span class="n">default_timeout</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_read_dtype</span> <span class="o">=</span> <span class="n">read_dtype</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_read_upto_frame</span> <span class="o">=</span> <span class="n">read_upto_frame</span>
+
+    <span class="k">def</span> <span class="nf">stop</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_stop_event</span><span class="o">.</span><span class="n">set</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">is_stopped</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">_stop_event</span><span class="o">.</span><span class="n">is_set</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="fm">__enter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+        <span class="k">return</span> <span class="bp">self</span>
+
+    <span class="k">def</span> <span class="fm">__exit__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">stop</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="nf">run</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">try</span><span class="p">:</span>
+            <span class="n">out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_backend</span><span class="o">.</span><span class="n">get_out_buffer</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_chunk_size</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_read_dtype</span><span class="p">)</span>
+            <span class="n">input_buffer</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_backend</span><span class="o">.</span><span class="n">get_input_buffer</span><span class="p">(</span><span class="n">num_frames</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_chunk_size</span><span class="p">)</span>
+            <span class="n">should_exit</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="k">while</span> <span class="ow">not</span> <span class="n">should_exit</span><span class="p">:</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_stopped</span><span class="p">():</span>
+                    <span class="k">break</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_backend</span><span class="o">.</span><span class="n">read_multi_frames</span><span class="p">(</span>
+                    <span class="n">out</span><span class="o">=</span><span class="n">out</span><span class="p">,</span>
+                    <span class="n">num_frames</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_chunk_size</span><span class="p">,</span>
+                    <span class="n">input_buffer</span><span class="o">=</span><span class="n">input_buffer</span><span class="p">,</span>
+                    <span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_default_timeout</span><span class="p">,</span>
+                    <span class="n">read_upto_frame</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_read_upto_frame</span><span class="p">,</span>
+                <span class="p">)</span>
+                <span class="k">if</span> <span class="n">res</span> <span class="ow">is</span> <span class="kc">False</span><span class="p">:</span>
+                    <span class="k">continue</span>  <span class="c1"># timeout, give main thread the chance to stop us</span>
+                <span class="k">if</span> <span class="n">res</span> <span class="ow">is</span> <span class="kc">True</span><span class="p">:</span>
+                    <span class="k">break</span>  <span class="c1"># we are done</span>
+                <span class="n">res_buffer</span><span class="p">,</span> <span class="n">res_start</span><span class="p">,</span> <span class="n">res_stop</span> <span class="o">=</span> <span class="n">res</span>
+
+                <span class="c1"># EOF, no frames left on the socket:</span>
+                <span class="k">if</span> <span class="n">res_stop</span> <span class="o">-</span> <span class="n">res_start</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                    <span class="k">break</span>
+
+                <span class="n">wrapped</span> <span class="o">=</span> <span class="n">ResultWrap</span><span class="p">(</span><span class="n">res_start</span><span class="p">,</span> <span class="n">res_stop</span><span class="p">,</span> <span class="n">res_buffer</span><span class="p">)</span>
+
+                <span class="c1"># retry until there is space in the output queue, or the thread is stopped:</span>
+                <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+                    <span class="k">try</span><span class="p">:</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">_out_queue</span><span class="o">.</span><span class="n">put</span><span class="p">(</span><span class="n">wrapped</span><span class="p">,</span> <span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_default_timeout</span><span class="p">)</span>
+                        <span class="k">break</span>
+                    <span class="k">except</span> <span class="n">queue</span><span class="o">.</span><span class="n">Full</span><span class="p">:</span>
+                        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_stopped</span><span class="p">():</span>
+                            <span class="n">should_exit</span> <span class="o">=</span> <span class="kc">True</span>
+                            <span class="k">break</span>
+
+                <span class="c1"># retry until value is consumed</span>
+                <span class="k">while</span> <span class="ow">not</span> <span class="n">wrapped</span><span class="o">.</span><span class="n">is_released</span><span class="p">(</span><span class="n">timeout</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_default_timeout</span><span class="p">):</span>
+                    <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_stopped</span><span class="p">():</span>  <span class="c1"># break out of outer loop</span>
+                        <span class="n">should_exit</span> <span class="o">=</span> <span class="kc">True</span>
+                        <span class="k">break</span>
+        <span class="k">finally</span><span class="p">:</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">stop</span><span class="p">()</span>  <span class="c1"># make sure the stopped flag is set in any case</span>
+
+
+<span class="k">class</span> <span class="nc">ReaderPoolImpl</span><span class="p">:</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">backend</span><span class="p">,</span> <span class="n">pool_size</span><span class="p">,</span> <span class="n">chunk_size</span><span class="p">,</span> <span class="n">read_upto_frame</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_pool_size</span> <span class="o">=</span> <span class="n">pool_size</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_backend</span> <span class="o">=</span> <span class="n">backend</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_chunk_size</span> <span class="o">=</span> <span class="n">chunk_size</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_out_queue</span> <span class="o">=</span> <span class="n">queue</span><span class="o">.</span><span class="n">Queue</span><span class="p">()</span>  <span class="c1"># TODO: possibly limit size?</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_threads</span> <span class="o">=</span> <span class="kc">None</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_read_upto_frame</span> <span class="o">=</span> <span class="n">read_upto_frame</span>
+
+    <span class="k">def</span> <span class="fm">__enter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_threads</span> <span class="o">=</span> <span class="p">[]</span>
+        <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_pool_size</span><span class="p">):</span>
+            <span class="n">t</span> <span class="o">=</span> <span class="n">ReaderThread</span><span class="p">(</span>
+                <span class="n">backend</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_backend</span><span class="p">,</span>
+                <span class="n">chunk_size</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_chunk_size</span><span class="p">,</span>
+                <span class="n">out_queue</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_out_queue</span><span class="p">,</span>
+                <span class="n">read_upto_frame</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_read_upto_frame</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">t</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_threads</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">t</span><span class="p">)</span>
+        <span class="k">return</span> <span class="bp">self</span>
+
+    <span class="k">def</span> <span class="fm">__exit__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;ReaderPoolImpl.__exit__: stopping threads&quot;</span><span class="p">)</span>
+        <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_threads</span><span class="p">:</span>  <span class="c1"># TODO: handle errors on stopping/joining? re-throw exceptions?</span>
+            <span class="n">t</span><span class="o">.</span><span class="n">stop</span><span class="p">()</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;ReaderPoolImpl: stop signal set&quot;</span><span class="p">)</span>
+            <span class="n">t</span><span class="o">.</span><span class="n">join</span><span class="p">()</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;ReaderPoolImpl: thread joined&quot;</span><span class="p">)</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">debug</span><span class="p">(</span><span class="s2">&quot;ReaderPoolImpl.__exit__: threads stopped&quot;</span><span class="p">)</span>
+
+    <span class="nd">@contextlib</span><span class="o">.</span><span class="n">contextmanager</span>
+    <span class="k">def</span> <span class="nf">get_result</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="k">try</span><span class="p">:</span>
+                <span class="n">res</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_out_queue</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="n">timeout</span><span class="o">=</span><span class="mf">0.2</span><span class="p">)</span>
+                <span class="k">yield</span> <span class="n">res</span>
+                <span class="n">res</span><span class="o">.</span><span class="n">release</span><span class="p">()</span>
+                <span class="k">return</span>
+            <span class="k">except</span> <span class="n">queue</span><span class="o">.</span><span class="n">Empty</span><span class="p">:</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">should_stop</span><span class="p">():</span>
+                    <span class="k">yield</span> <span class="kc">None</span>
+                    <span class="k">return</span>
+
+    <span class="k">def</span> <span class="nf">should_stop</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="k">return</span> <span class="nb">any</span><span class="p">(</span>
+            <span class="n">t</span><span class="o">.</span><span class="n">is_stopped</span><span class="p">()</span>
+            <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">_threads</span>
+        <span class="p">)</span>
+
+
+<span class="k">class</span> <span class="nc">ReaderPool</span><span class="p">:</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">backend</span><span class="p">,</span> <span class="n">pool_size</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_backend</span> <span class="o">=</span> <span class="n">backend</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_pool_size</span> <span class="o">=</span> <span class="n">pool_size</span>
+
+    <span class="k">def</span> <span class="nf">get_impl</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">chunk_size</span><span class="o">=</span><span class="mi">10</span><span class="p">,</span> <span class="n">read_upto_frame</span><span class="o">=</span><span class="kc">None</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Returns a new `ReaderPoolImpl`, which will read up to</span>
+<span class="sd">        the frame index given in `read_upto_frame`, or all frames</span>
+<span class="sd">        in case it is `None`.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="n">ReaderPoolImpl</span><span class="p">(</span>
+            <span class="n">backend</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_backend</span><span class="p">,</span>
+            <span class="n">pool_size</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">_pool_size</span><span class="p">,</span>
+            <span class="n">chunk_size</span><span class="o">=</span><span class="n">chunk_size</span><span class="p">,</span>
+            <span class="n">read_upto_frame</span><span class="o">=</span><span class="n">read_upto_frame</span><span class="p">,</span>
+        <span class="p">)</span>
+
+
+<div class="viewcode-block" id="MerlinDataSource"><a class="viewcode-back" href="../../../../reference.html#libertem_live.detectors.merlin.MerlinDataSource">[docs]</a><span class="k">class</span> <span class="nc">MerlinDataSource</span><span class="p">:</span>
+    <span class="k">def</span> <span class="fm">__init__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">host</span><span class="p">,</span> <span class="n">port</span><span class="p">,</span> <span class="n">pool_size</span><span class="o">=</span><span class="mi">2</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">socket</span> <span class="o">=</span> <span class="n">MerlinDataSocket</span><span class="p">(</span><span class="n">host</span><span class="o">=</span><span class="n">host</span><span class="p">,</span> <span class="n">port</span><span class="o">=</span><span class="n">port</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">pool</span> <span class="o">=</span> <span class="n">ReaderPool</span><span class="p">(</span><span class="n">backend</span><span class="o">=</span><span class="bp">self</span><span class="o">.</span><span class="n">socket</span><span class="p">,</span> <span class="n">pool_size</span><span class="o">=</span><span class="n">pool_size</span><span class="p">)</span>
+
+    <span class="k">def</span> <span class="fm">__enter__</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">socket</span><span class="o">.</span><span class="fm">__enter__</span><span class="p">()</span>
+
+    <span class="k">def</span> <span class="fm">__exit__</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">socket</span><span class="o">.</span><span class="fm">__exit__</span><span class="p">(</span><span class="o">*</span><span class="n">args</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">)</span>
+
+<div class="viewcode-block" id="MerlinDataSource.inline_stream"><a class="viewcode-back" href="../../../../reference.html#libertem_live.detectors.merlin.MerlinDataSource.inline_stream">[docs]</a>    <span class="k">def</span> <span class="nf">inline_stream</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">read_dtype</span><span class="o">=</span><span class="n">np</span><span class="o">.</span><span class="n">float32</span><span class="p">,</span> <span class="n">chunk_size</span><span class="o">=</span><span class="mi">10</span><span class="p">):</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">socket</span><span class="o">.</span><span class="n">read_headers</span><span class="p">()</span>
+        <span class="n">hdr</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">socket</span><span class="o">.</span><span class="n">get_acquisition_header</span><span class="p">()</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="n">hdr</span><span class="p">)</span>
+
+        <span class="n">out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">socket</span><span class="o">.</span><span class="n">get_out_buffer</span><span class="p">(</span><span class="n">chunk_size</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">read_dtype</span><span class="p">)</span>
+        <span class="n">input_buffer</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">socket</span><span class="o">.</span><span class="n">get_input_buffer</span><span class="p">(</span><span class="n">num_frames</span><span class="o">=</span><span class="n">chunk_size</span><span class="p">)</span>
+
+        <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+            <span class="n">res</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">socket</span><span class="o">.</span><span class="n">read_multi_frames</span><span class="p">(</span>
+                <span class="n">out</span><span class="o">=</span><span class="n">out</span><span class="p">,</span>
+                <span class="n">num_frames</span><span class="o">=</span><span class="n">chunk_size</span><span class="p">,</span>
+                <span class="n">input_buffer</span><span class="o">=</span><span class="n">input_buffer</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="ow">not</span> <span class="n">res</span><span class="p">:</span>
+                <span class="k">break</span>
+            <span class="k">if</span> <span class="n">res</span> <span class="ow">is</span> <span class="kc">True</span><span class="p">:</span>
+                <span class="k">break</span>
+            <span class="n">buf</span><span class="p">,</span> <span class="n">frame_idx_start</span><span class="p">,</span> <span class="n">frame_idx_end</span> <span class="o">=</span> <span class="n">res</span>
+            <span class="k">if</span> <span class="n">frame_idx_end</span> <span class="o">-</span> <span class="n">frame_idx_start</span> <span class="o">==</span> <span class="mi">0</span><span class="p">:</span>
+                <span class="k">break</span>
+            <span class="k">yield</span> <span class="n">buf</span></div>
+
+<div class="viewcode-block" id="MerlinDataSource.stream"><a class="viewcode-back" href="../../../../reference.html#libertem_live.detectors.merlin.MerlinDataSource.stream">[docs]</a>    <span class="k">def</span> <span class="nf">stream</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">num_frames</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span> <span class="n">chunk_size</span><span class="o">=</span><span class="mi">11</span><span class="p">):</span>
+        <span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Examples</span>
+<span class="sd">        --------</span>
+
+<span class="sd">        &gt;&gt;&gt; source = MerlinDataSource(...)  # doctest: +SKIP</span>
+<span class="sd">        &gt;&gt;&gt; with source:  # doctest: +SKIP</span>
+<span class="sd">        ...     for _ in source.stream():  # doctest: +SKIP</span>
+<span class="sd">        ...         ...</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">socket</span><span class="o">.</span><span class="n">read_headers</span><span class="p">()</span>
+        <span class="n">hdr</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">socket</span><span class="o">.</span><span class="n">get_acquisition_header</span><span class="p">()</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span><span class="n">hdr</span><span class="p">)</span>
+        <span class="n">pool</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">pool</span><span class="o">.</span><span class="n">get_impl</span><span class="p">(</span>
+            <span class="n">read_upto_frame</span><span class="o">=</span><span class="n">num_frames</span><span class="p">,</span>
+            <span class="n">chunk_size</span><span class="o">=</span><span class="n">chunk_size</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="k">with</span> <span class="n">pool</span><span class="p">:</span>
+            <span class="k">while</span> <span class="kc">True</span><span class="p">:</span>
+                <span class="k">with</span> <span class="n">pool</span><span class="o">.</span><span class="n">get_result</span><span class="p">()</span> <span class="k">as</span> <span class="n">res_wrapped</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="n">pool</span><span class="o">.</span><span class="n">should_stop</span><span class="p">():</span>
+                        <span class="k">break</span>
+                    <span class="k">yield</span> <span class="n">res_wrapped</span></div></div>
+</pre></div>
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<p class="logo">
+  <a href="../../../../index.html">
+    <img class="logo" src="../../../../_static/logo.png" alt="Logo"/>
+    
+  </a>
+</p>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../../usage.html">Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../changelog.html">Changelog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../acknowledgments.html">Acknowledgments</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../../reference.html">Reference</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../../index.html">Documentation overview</a><ul>
+  <li><a href="../../../index.html">Module code</a><ul>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;LiberTEM-live Authors.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.4.3</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+    </div>
+
+    
+
+    
+  </body>
+</html>

@@ -1,0 +1,645 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Reference &#8212; LiberTEM-live 0.2.0.dev0 documentation</title>
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/doctools.js"></script>
+    <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script async="async" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <script type="text/x-mathjax-config">MathJax.Hub.Config({"tex2jax": {"inlineMath": [["$", "$"], ["\\(", "\\)"]], "processEscapes": true, "ignoreClass": "document", "processClass": "math|output_area"}})</script>
+    <link rel="shortcut icon" href="_static/favicon.ico"/>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="prev" title="Acknowledgments" href="acknowledgments.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="reference">
+<h1>Reference<a class="headerlink" href="#reference" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="module-libertem_live.api">
+<span id="live-context"></span><h2>Live Context<a class="headerlink" href="#module-libertem_live.api" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="libertem_live.api.LiveContext">
+<em class="property">class </em><code class="sig-prename descclassname">libertem_live.api.</code><code class="sig-name descname">LiveContext</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">executor</span><span class="p">:</span> <span class="n">Optional<span class="p">[</span>libertem.executor.base.JobExecutor<span class="p">]</span></span> <span class="o">=</span> <span class="default_value">None</span></em>, <em class="sig-param"><span class="n">plot_class</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/libertem_live/api.html#LiveContext"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#libertem_live.api.LiveContext" title="Permalink to this definition">¶</a></dt>
+<dd><p>A <a class="reference internal" href="#libertem_live.api.LiveContext" title="libertem_live.api.LiveContext"><code class="xref py py-class docutils literal notranslate"><span class="pre">LiveContext</span></code></a> behaves like a <a class="reference external" href="https://libertem.github.io/LiberTEM/reference/api.html#libertem.api.Context" title="(in LiberTEM v0.8)"><code class="xref py py-class docutils literal notranslate"><span class="pre">Context</span></code></a> in most
+circumstances. Notable differences are that it currently starts an
+<code class="xref py py-class docutils literal notranslate"><span class="pre">InlineJobExecutor</span></code> instead of a
+<code class="xref py py-class docutils literal notranslate"><span class="pre">DaskJobExecutor</span></code> if no executor is passed in
+the constructor, and that it can prepare and run acquisitions on top of
+loading offline datasets.</p>
+<p>The docstrings for most functions are inherited from the base class. Most
+methods, in particular <a class="reference internal" href="#libertem_live.api.LiveContext.run_udf" title="libertem_live.api.LiveContext.run_udf"><code class="xref py py-meth docutils literal notranslate"><span class="pre">run_udf()</span></code></a> and <a class="reference internal" href="#libertem_live.api.LiveContext.run_udf_iter" title="libertem_live.api.LiveContext.run_udf_iter"><code class="xref py py-meth docutils literal notranslate"><span class="pre">run_udf_iter()</span></code></a>, now accept
+both an acquisition object and a dataset as the <code class="code docutils literal notranslate"><span class="pre">dataset</span></code> parameter.</p>
+<dl class="py method">
+<dt id="libertem_live.api.LiveContext.prepare_acquisition">
+<code class="sig-name descname">prepare_acquisition</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">detector_type</span></em>, <em class="sig-param"><span class="o">*</span><span class="n">args</span></em>, <em class="sig-param"><span class="n">trigger</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/libertem_live/api.html#LiveContext.prepare_acquisition"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#libertem_live.api.LiveContext.prepare_acquisition" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create an acquisition object.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>detector_type</strong> (<a class="reference external" href="https://docs.python.org/3.7/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – <ul>
+<li><p><code class="code docutils literal notranslate"><span class="pre">'merlin'</span></code>: Quantum Detectors Merlin camera.</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">'memory'</span></code>: Memory-based live data stream.</p></li>
+</ul>
+</p></li>
+<li><p><strong>trigger</strong> (<em>function</em>) – Keyword-only parameter, callback function to trigger an acquisition.
+See <a class="reference internal" href="usage.html#trigger"><span class="std std-ref">Define a callback function to trigger an acquisition</span></a> for more information.</p></li>
+<li><p><strong>*args</strong> – Additional parameters for the acquisition. See <a class="reference internal" href="#detector-reference"><span class="std std-ref">Detectors</span></a> for details
+of individual acquisition types!</p></li>
+<li><p><strong>**kwargs</strong> – Additional parameters for the acquisition. See <a class="reference internal" href="#detector-reference"><span class="std std-ref">Detectors</span></a> for details
+of individual acquisition types!</p></li>
+</ul>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<p>See <a class="reference internal" href="usage.html#usage"><span class="std std-ref">Usage</span></a> in the documentation!</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="libertem_live.api.LiveContext.run_udf">
+<code class="sig-name descname">run_udf</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">dataset</span></em>, <em class="sig-param"><span class="n">udf</span></em>, <em class="sig-param"><span class="o">*</span><span class="n">args</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/libertem_live/api.html#LiveContext.run_udf"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#libertem_live.api.LiveContext.run_udf" title="Permalink to this definition">¶</a></dt>
+<dd><p>Run <code class="code docutils literal notranslate"><span class="pre">udf</span></code> on <code class="code docutils literal notranslate"><span class="pre">dataset</span></code>, restricted to the region of interest <code class="code docutils literal notranslate"><span class="pre">roi</span></code>.</p>
+<div class="versionchanged">
+<p><span class="versionmodified changed">Changed in version 0.5.0: </span>Added the <code class="code docutils literal notranslate"><span class="pre">progress</span></code> parameter</p>
+</div>
+<div class="versionchanged">
+<p><span class="versionmodified changed">Changed in version 0.6.0: </span>Added the <code class="code docutils literal notranslate"><span class="pre">corrections</span></code> and <code class="code docutils literal notranslate"><span class="pre">backends</span></code> parameter</p>
+</div>
+<div class="versionchanged">
+<p><span class="versionmodified changed">Changed in version 0.7.0: </span>Added the <code class="code docutils literal notranslate"><span class="pre">plots</span></code> and <code class="code docutils literal notranslate"><span class="pre">sync</span></code> parameters,
+and the ability to run multiple UDFs on the same data in a single pass.</p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>dataset</strong> – The dataset to work on</p></li>
+<li><p><strong>udf</strong> – UDF instance you want to run, or a list of UDF instances</p></li>
+<li><p><strong>roi</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v1.21)"><em>numpy.ndarray</em></a>) – Region of interest as bool mask over the navigation axes of the dataset</p></li>
+<li><p><strong>progress</strong> (<a class="reference external" href="https://docs.python.org/3.7/library/functions.html#bool" title="(in Python v3.7)"><em>bool</em></a>) – Show progress bar</p></li>
+<li><p><strong>corrections</strong> – Corrections to apply while running the UDF. If none are given,
+the corrections that are part of the <code class="code docutils literal notranslate"><span class="pre">DataSet</span></code> are used,
+if there are any. See also <a class="reference external" href="https://libertem.github.io/LiberTEM/reference/corrections.html#corrections" title="(in LiberTEM v0.8)"><span>Corrections</span></a>.</p></li>
+<li><p><strong>backends</strong> (<a class="reference external" href="https://docs.python.org/3.7/library/constants.html#None" title="(in Python v3.7)"><em>None</em></a><em> or </em><em>iterable containing 'numpy'</em><em>, </em><em>'cupy' and/or 'cuda'</em>) – Restrict the back-end to a subset of the capabilities of the UDF.
+This can be useful for testing hybrid UDFs.</p></li>
+<li><p><strong>plots</strong> (<a class="reference external" href="https://docs.python.org/3.7/library/constants.html#None" title="(in Python v3.7)"><em>None</em></a><em> or </em><em>True</em><em> or </em><em>List</em><em>[</em><em>List</em><em>[</em><em>Union</em><em>[</em><a class="reference external" href="https://docs.python.org/3.7/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a><em>, </em><em>Tuple</em><em>[</em><a class="reference external" href="https://docs.python.org/3.7/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a><em>, </em><em>Callable</em><em>]</em><em>]</em><em>]</em><em>] or </em><em>List</em><em>[</em><em>LivePlot</em><em>]</em>) – <ul>
+<li><p><code class="code docutils literal notranslate"><span class="pre">None</span></code>: don’t plot anything (default)</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">True</span></code>: plot all 2D UDF result buffers</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">List[List[...]]</span></code>: plot the named UDF buffers. Pass a list of names or
+(name, callable) tuples for each UDF you want to plot. If the callable is specified,
+it is applied to the UDF buffer before plotting.</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">List[LivePlot]</span></code>: <code class="xref py py-class docutils literal notranslate"><span class="pre">LivePlot</span></code> instance for each
+channel you want to plot</p></li>
+</ul>
+<div class="versionadded">
+<p><span class="versionmodified added">New in version 0.7.0.</span></p>
+</div>
+</p></li>
+<li><p><strong>sync</strong> (<a class="reference external" href="https://docs.python.org/3.7/library/functions.html#bool" title="(in Python v3.7)"><em>bool</em></a>) – <p>By default, <cite>run_udf</cite> is a synchronous method. If <cite>sync</cite> is set to <cite>False</cite>,
+it is awaitable instead.</p>
+<div class="versionadded">
+<p><span class="versionmodified added">New in version 0.7.0.</span></p>
+</div>
+</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><p>Return value of the UDF containing the result buffers of
+type <a class="reference external" href="https://libertem.github.io/LiberTEM/reference/udf.html#libertem.common.buffers.BufferWrapper" title="(in LiberTEM v0.8)"><code class="xref py py-class docutils literal notranslate"><span class="pre">libertem.common.buffers.BufferWrapper</span></code></a>. Note that a
+<a class="reference external" href="https://libertem.github.io/LiberTEM/reference/udf.html#libertem.common.buffers.BufferWrapper" title="(in LiberTEM v0.8)"><code class="xref py py-class docutils literal notranslate"><span class="pre">BufferWrapper</span></code></a> can be used like
+a <a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v1.21)"><code class="xref py py-class docutils literal notranslate"><span class="pre">numpy.ndarray</span></code></a> in many cases because it implements
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">__array__()</span></code>. You can access the underlying numpy array using the
+<code class="xref py py-attr docutils literal notranslate"><span class="pre">data</span></code> property.</p>
+<p>If a list of UDFs was passed in, the returned type is
+a Tuple[dict[str,BufferWrapper]].</p>
+</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><a class="reference external" href="https://docs.python.org/3.7/library/stdtypes.html#dict" title="(in Python v3.7)">dict</a> or Tuple[<a class="reference external" href="https://docs.python.org/3.7/library/stdtypes.html#dict" title="(in Python v3.7)">dict</a>]</p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<p>Run the <cite>SumUDF</cite> on a data set:</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">libertem.udf.sum</span> <span class="kn">import</span> <span class="n">SumUDF</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">result</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">run_udf</span><span class="p">(</span><span class="n">dataset</span><span class="o">=</span><span class="n">dataset</span><span class="p">,</span> <span class="n">udf</span><span class="o">=</span><span class="n">SumUDF</span><span class="p">())</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;intensity&quot;</span><span class="p">])</span><span class="o">.</span><span class="n">shape</span>
+<span class="go">(32, 32)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1"># intensity is the name of the result buffer, defined in the SumUDF</span>
+</pre></div>
+</div>
+<p>Running a UDF on a subset of data:</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">libertem.udf.sumsigudf</span> <span class="kn">import</span> <span class="n">SumSigUDF</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">roi</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="n">dataset</span><span class="o">.</span><span class="n">shape</span><span class="o">.</span><span class="n">nav</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="nb">bool</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">roi</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="kc">True</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">result</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">run_udf</span><span class="p">(</span><span class="n">dataset</span><span class="o">=</span><span class="n">dataset</span><span class="p">,</span> <span class="n">udf</span><span class="o">=</span><span class="n">SumSigUDF</span><span class="p">(),</span> <span class="n">roi</span><span class="o">=</span><span class="n">roi</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1"># to get the full navigation-shaped results, with NaNs where the `roi` was False:</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;intensity&quot;</span><span class="p">])</span><span class="o">.</span><span class="n">shape</span>
+<span class="go">(16, 16)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1"># to only get the selected results as a flat array:</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">result</span><span class="p">[</span><span class="s2">&quot;intensity&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">raw_data</span><span class="o">.</span><span class="n">shape</span>
+<span class="go">(1,)</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt id="libertem_live.api.LiveContext.run_udf_iter">
+<code class="sig-name descname">run_udf_iter</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">dataset</span></em>, <em class="sig-param"><span class="n">udf</span></em>, <em class="sig-param"><span class="o">*</span><span class="n">args</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/libertem_live/api.html#LiveContext.run_udf_iter"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#libertem_live.api.LiveContext.run_udf_iter" title="Permalink to this definition">¶</a></dt>
+<dd><p>Run <code class="code docutils literal notranslate"><span class="pre">udf</span></code> on <code class="code docutils literal notranslate"><span class="pre">dataset</span></code>, restricted to the region of interest <code class="code docutils literal notranslate"><span class="pre">roi</span></code>.
+Yields partial results after each merge operation.</p>
+<div class="versionadded">
+<p><span class="versionmodified added">New in version 0.7.0.</span></p>
+</div>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>dataset</strong> – The dataset to work on</p></li>
+<li><p><strong>udf</strong> – UDF instance you want to run, or a list of UDF instances</p></li>
+<li><p><strong>roi</strong> (<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.ndarray.html#numpy.ndarray" title="(in NumPy v1.21)"><em>numpy.ndarray</em></a>) – Region of interest as bool mask over the navigation axes of the dataset</p></li>
+<li><p><strong>progress</strong> (<a class="reference external" href="https://docs.python.org/3.7/library/functions.html#bool" title="(in Python v3.7)"><em>bool</em></a>) – Show progress bar</p></li>
+<li><p><strong>corrections</strong> – Corrections to apply while running the UDF. If none are given,
+the corrections that are part of the <code class="code docutils literal notranslate"><span class="pre">DataSet</span></code> are used,
+if there are any. See also <a class="reference external" href="https://libertem.github.io/LiberTEM/reference/corrections.html#corrections" title="(in LiberTEM v0.8)"><span>Corrections</span></a>.</p></li>
+<li><p><strong>backends</strong> (<a class="reference external" href="https://docs.python.org/3.7/library/constants.html#None" title="(in Python v3.7)"><em>None</em></a><em> or </em><em>iterable containing 'numpy'</em><em>, </em><em>'cupy' and/or 'cuda'</em>) – Restrict the back-end to a subset of the capabilities of the UDF.
+This can be useful for testing hybrid UDFs.</p></li>
+<li><p><strong>plots</strong> (<a class="reference external" href="https://docs.python.org/3.7/library/constants.html#None" title="(in Python v3.7)"><em>None</em></a><em> or </em><em>True</em><em> or </em><em>List</em><em>[</em><em>List</em><em>[</em><em>Union</em><em>[</em><a class="reference external" href="https://docs.python.org/3.7/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a><em>, </em><em>Tuple</em><em>[</em><a class="reference external" href="https://docs.python.org/3.7/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a><em>, </em><em>Callable</em><em>]</em><em>]</em><em>]</em><em>] or </em><em>List</em><em>[</em><em>LivePlot</em><em>]</em>) – <ul>
+<li><p><code class="code docutils literal notranslate"><span class="pre">None</span></code>: don’t plot anything (default)</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">True</span></code>: plot all 2D UDF result buffers</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">List[List[...]]</span></code>: plot the named UDF buffers. Pass a list of names or
+(name, callable) tuples for each UDF you want to plot. If the callable is specified,
+it is applied to the UDF buffer before plotting.</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">List[LivePlot]</span></code>: <code class="xref py py-class docutils literal notranslate"><span class="pre">LivePlot</span></code> instance for each
+channel you want to plot</p></li>
+</ul>
+</p></li>
+<li><p><strong>sync</strong> (<a class="reference external" href="https://docs.python.org/3.7/library/functions.html#bool" title="(in Python v3.7)"><em>bool</em></a>) – By default, <cite>run_udf_iter</cite> is a synchronous method. If <cite>sync</cite> is set to <cite>False</cite>,
+an async generator will be returned instead.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Generator of <a class="reference external" href="https://libertem.github.io/LiberTEM/reference/udf.html#libertem.udf.base.UDFResults" title="(in LiberTEM v0.8)"><code class="xref py py-class docutils literal notranslate"><span class="pre">UDFResults</span></code></a> container objects.
+Their attribute <code class="code docutils literal notranslate"><span class="pre">buffers</span></code> is the list of result buffer dictionaries for the UDFs.
+Attribute <code class="code docutils literal notranslate"><span class="pre">damage</span></code> is a <a class="reference external" href="https://libertem.github.io/LiberTEM/reference/udf.html#libertem.common.buffers.BufferWrapper" title="(in LiberTEM v0.8)"><code class="xref py py-class docutils literal notranslate"><span class="pre">BufferWrapper</span></code></a>
+of <code class="code docutils literal notranslate"><span class="pre">kind='nav'</span></code>, <code class="code docutils literal notranslate"><span class="pre">dtype=bool</span></code> indicating the positions
+in nav space that have been processed already.</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p>Generator[UDFResults]</p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<p>Run the <cite>SumUDF</cite> on a data set:</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">libertem.udf.sum</span> <span class="kn">import</span> <span class="n">SumUDF</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">for</span> <span class="n">result</span> <span class="ow">in</span> <span class="n">ctx</span><span class="o">.</span><span class="n">run_udf_iter</span><span class="p">(</span><span class="n">dataset</span><span class="o">=</span><span class="n">dataset</span><span class="p">,</span> <span class="n">udf</span><span class="o">=</span><span class="n">SumUDF</span><span class="p">()):</span>
+<span class="gp">... </span>    <span class="k">assert</span> <span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">buffers</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s2">&quot;intensity&quot;</span><span class="p">])</span><span class="o">.</span><span class="n">shape</span> <span class="o">==</span> <span class="p">(</span><span class="mi">32</span><span class="p">,</span> <span class="mi">32</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">np</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">result</span><span class="o">.</span><span class="n">buffers</span><span class="p">[</span><span class="mi">0</span><span class="p">][</span><span class="s2">&quot;intensity&quot;</span><span class="p">])</span><span class="o">.</span><span class="n">shape</span>
+<span class="go">(32, 32)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="c1"># intensity is the name of the result buffer, defined in the SumUDF</span>
+</pre></div>
+</div>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="detectors">
+<span id="detector-reference"></span><h2>Detectors<a class="headerlink" href="#detectors" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="quantum-detectors-merlin">
+<span id="merlin-detector"></span><h3>Quantum Detectors Merlin<a class="headerlink" href="#quantum-detectors-merlin" title="Permalink to this headline">¶</a></h3>
+<p>Supported are currently 1 bit, 6 bit and 12 bit <code class="code docutils literal notranslate"><span class="pre">COUNTERDEPTH</span></code> for both the “binary”
+(<code class="code docutils literal notranslate"><span class="pre">FILEFORMAT</span> <span class="pre">0</span></code>) and the “raw binary” format (<code class="code docutils literal notranslate"><span class="pre">FILEFORMAT</span> <span class="pre">2</span></code>).</p>
+<p>For testing, an acquisition with soft trigger (<code class="code docutils literal notranslate"><span class="pre">TRIGGERSTART</span> <span class="pre">5</span></code>) is
+recommended since internal trigger (<code class="code docutils literal notranslate"><span class="pre">TRIGGERSTART</span> <span class="pre">0</span></code>) may cause issues
+with finding the beginning of the data stream. For a real STEM acquisition a
+hardware trigger setup that matches the given instrument is required. See the
+MerlinEM User Manual from Quantum Detectors for details!</p>
+<p>A simple simulator for testing live acquisition without the actual hardware is
+included in LiberTEM-Live. It replays an MIB dataset and accepts the following
+parameters:</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="o">(</span>libertem<span class="o">)</span> $ libertem-live-mib-sim --help
+Usage: libertem-live-mib-sim <span class="o">[</span>OPTIONS<span class="o">]</span> PATH
+
+Options:
+--nav-shape &lt;INTEGER INTEGER&gt;...
+--continuous
+--cached <span class="o">[</span>NONE<span class="p">|</span>MEM<span class="p">|</span>MEMFD<span class="o">]</span>
+--host TEXT                     Address to listen on <span class="o">(</span>data, control, and
+                                trigger sockets<span class="o">)</span>
+--data-port INTEGER
+--control-port INTEGER
+--wait-trigger                  Wait <span class="k">for</span> a SOFTTRIGGER <span class="nb">command</span> on the
+                                control port, or a trigger signal on the
+                                trigger socket
+--garbage                       Send garbage before trigger. Implies --wait-
+                                trigger
+--max-runs INTEGER
+--help                          Show this message and exit.
+</pre></div>
+</div>
+<span class="target" id="module-libertem_live.detectors.merlin"></span><dl class="py class">
+<dt id="libertem_live.detectors.merlin.MerlinAcquisition">
+<em class="property">class </em><code class="sig-prename descclassname">libertem_live.detectors.merlin.</code><code class="sig-name descname">MerlinAcquisition</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">trigger</span></em>, <em class="sig-param"><span class="n">scan_size</span></em>, <em class="sig-param"><span class="n">host</span><span class="o">=</span><span class="default_value">'127.0.0.1'</span></em>, <em class="sig-param"><span class="n">port</span><span class="o">=</span><span class="default_value">6342</span></em>, <em class="sig-param"><span class="n">drain</span><span class="o">=</span><span class="default_value">True</span></em>, <em class="sig-param"><span class="n">frames_per_partition</span><span class="o">=</span><span class="default_value">256</span></em>, <em class="sig-param"><span class="n">pool_size</span><span class="o">=</span><span class="default_value">2</span></em>, <em class="sig-param"><span class="n">timeout</span><span class="o">=</span><span class="default_value">5</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/libertem_live/detectors/merlin/acquisition.html#MerlinAcquisition"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#libertem_live.detectors.merlin.MerlinAcquisition" title="Permalink to this definition">¶</a></dt>
+<dd><p>Acquisition from a Quantum Detectors Merlin camera</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>trigger</strong> (<em>function</em><em>(</em><em>)</em>) – See <a class="reference internal" href="#libertem_live.api.LiveContext.prepare_acquisition" title="libertem_live.api.LiveContext.prepare_acquisition"><code class="xref py py-meth docutils literal notranslate"><span class="pre">prepare_acquisition()</span></code></a>
+and <a class="reference internal" href="usage.html#trigger"><span class="std std-ref">Define a callback function to trigger an acquisition</span></a> for details!</p></li>
+<li><p><strong>scan_size</strong> (<a class="reference external" href="https://docs.python.org/3.7/library/stdtypes.html#tuple" title="(in Python v3.7)"><em>tuple</em></a><em>(</em><a class="reference external" href="https://docs.python.org/3.7/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a><em>)</em>) – </p></li>
+<li><p><strong>host</strong> (<a class="reference external" href="https://docs.python.org/3.7/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – Hostname of the Merlin data server, default ‘127.0.0.1’</p></li>
+<li><p><strong>port</strong> (<a class="reference external" href="https://docs.python.org/3.7/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – Data port of the Merlin data server, default 6342</p></li>
+<li><p><strong>drain</strong> (<a class="reference external" href="https://docs.python.org/3.7/library/functions.html#bool" title="(in Python v3.7)"><em>bool</em></a>) – Drain the socket before triggering. Disable this when using internal
+start trigger!</p></li>
+<li><p><strong>frames_per_partition</strong> (<a class="reference external" href="https://docs.python.org/3.7/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – Number of frames to process before performing a merge operation. Decreasing this number
+increases the update rate, but can decrease performance.</p></li>
+<li><p><strong>pool_size</strong> (<a class="reference external" href="https://docs.python.org/3.7/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – Number of decoding threads. Defaults to 2</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="libertem_live.detectors.merlin.MerlinAcquisition.acquire">
+<code class="sig-name descname">acquire</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/libertem_live/detectors/merlin/acquisition.html#MerlinAcquisition.acquire"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#libertem_live.detectors.merlin.MerlinAcquisition.acquire" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="libertem_live.detectors.merlin.MerlinAcquisition.check_valid">
+<code class="sig-name descname">check_valid</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/libertem_live/detectors/merlin/acquisition.html#MerlinAcquisition.check_valid"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#libertem_live.detectors.merlin.MerlinAcquisition.check_valid" title="Permalink to this definition">¶</a></dt>
+<dd><p>check validity of the DataSet. this will be executed (after initialize) on a worker node.
+should raise DataSetException in case of errors, return True otherwise.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="libertem_live.detectors.merlin.MerlinAcquisition.dtype">
+<em class="property">property </em><code class="sig-name descname">dtype</code><a class="headerlink" href="#libertem_live.detectors.merlin.MerlinAcquisition.dtype" title="Permalink to this definition">¶</a></dt>
+<dd><p>the destination data type</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="libertem_live.detectors.merlin.MerlinAcquisition.get_partitions">
+<code class="sig-name descname">get_partitions</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/libertem_live/detectors/merlin/acquisition.html#MerlinAcquisition.get_partitions"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#libertem_live.detectors.merlin.MerlinAcquisition.get_partitions" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return a generator over all Partitions in this DataSet. Should only
+be called on the master node.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="libertem_live.detectors.merlin.MerlinAcquisition.initialize">
+<code class="sig-name descname">initialize</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">executor</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/libertem_live/detectors/merlin/acquisition.html#MerlinAcquisition.initialize"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#libertem_live.detectors.merlin.MerlinAcquisition.initialize" title="Permalink to this definition">¶</a></dt>
+<dd><p>Perform possibly expensive initialization, like pre-loading metadata.</p>
+<p>This is run on the master node, but can execute parts on workers, for example
+if they need to access the data stored on worker nodes, using the passed executor
+instance.</p>
+<p>If you need the executor around for later operations, for example when creating
+the partitioning, save a reference here!</p>
+<p>Should return the possibly modified <cite>DataSet</cite> instance (if a method running
+on a worker is changing <cite>self</cite>, these changes won’t automatically be transferred back
+to the master node)</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="libertem_live.detectors.merlin.MerlinAcquisition.meta">
+<em class="property">property </em><code class="sig-name descname">meta</code><a class="headerlink" href="#libertem_live.detectors.merlin.MerlinAcquisition.meta" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="libertem_live.detectors.merlin.MerlinAcquisition.raw_dtype">
+<em class="property">property </em><code class="sig-name descname">raw_dtype</code><a class="headerlink" href="#libertem_live.detectors.merlin.MerlinAcquisition.raw_dtype" title="Permalink to this definition">¶</a></dt>
+<dd><p>the underlying data type</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="libertem_live.detectors.merlin.MerlinAcquisition.shape">
+<em class="property">property </em><code class="sig-name descname">shape</code><a class="headerlink" href="#libertem_live.detectors.merlin.MerlinAcquisition.shape" title="Permalink to this definition">¶</a></dt>
+<dd><p>The shape of the DataSet, as it makes sense for the application domain
+(for example, 4D for pixelated STEM)</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="libertem_live.detectors.merlin.MerlinAcquisition.source">
+<em class="property">property </em><code class="sig-name descname">source</code><a class="headerlink" href="#libertem_live.detectors.merlin.MerlinAcquisition.source" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="libertem_live.detectors.merlin.MerlinControl">
+<em class="property">class </em><code class="sig-prename descclassname">libertem_live.detectors.merlin.</code><code class="sig-name descname">MerlinControl</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">host</span><span class="o">=</span><span class="default_value">'127.0.0.1'</span></em>, <em class="sig-param"><span class="n">port</span><span class="o">=</span><span class="default_value">6341</span></em>, <em class="sig-param"><span class="n">timeout</span><span class="o">=</span><span class="default_value">1.0</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/libertem_live/detectors/merlin/control.html#MerlinControl"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#libertem_live.detectors.merlin.MerlinControl" title="Permalink to this definition">¶</a></dt>
+<dd><p>This class can be used to control a merlin medipix detector.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>host</strong> (<a class="reference external" href="https://docs.python.org/3.7/library/stdtypes.html#str" title="(in Python v3.7)"><em>str</em></a>) – The hostname to connect to</p></li>
+<li><p><strong>port</strong> (<a class="reference external" href="https://docs.python.org/3.7/library/functions.html#int" title="(in Python v3.7)"><em>int</em></a>) – The port to connect to</p></li>
+<li><p><strong>timeout</strong> (<a class="reference external" href="https://docs.python.org/3.7/library/functions.html#float" title="(in Python v3.7)"><em>float</em></a>) – The timeout, in seconds, after which a response is expected</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py method">
+<dt id="libertem_live.detectors.merlin.MerlinControl.close">
+<code class="sig-name descname">close</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/libertem_live/detectors/merlin/control.html#MerlinControl.close"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#libertem_live.detectors.merlin.MerlinControl.close" title="Permalink to this definition">¶</a></dt>
+<dd><p>Close the socket connection. Usually, instead of calling this function,
+you should use this class as a context manager.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="libertem_live.detectors.merlin.MerlinControl.cmd">
+<code class="sig-name descname">cmd</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">cmd</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/libertem_live/detectors/merlin/control.html#MerlinControl.cmd"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#libertem_live.detectors.merlin.MerlinControl.cmd" title="Permalink to this definition">¶</a></dt>
+<dd><p>Send a CMD command, and return the response</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="libertem_live.detectors.merlin.MerlinControl.connect">
+<code class="sig-name descname">connect</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/libertem_live/detectors/merlin/control.html#MerlinControl.connect"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#libertem_live.detectors.merlin.MerlinControl.connect" title="Permalink to this definition">¶</a></dt>
+<dd><p>Connect to the merlin control socket. Usually, you would instead use this
+class as a context manager.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="libertem_live.detectors.merlin.MerlinControl.get">
+<code class="sig-name descname">get</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">param</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/libertem_live/detectors/merlin/control.html#MerlinControl.get"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#libertem_live.detectors.merlin.MerlinControl.get" title="Permalink to this definition">¶</a></dt>
+<dd><p>Send a GET command, and return the response</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="libertem_live.detectors.merlin.MerlinControl.send_command_file">
+<code class="sig-name descname">send_command_file</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">filename</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/libertem_live/detectors/merlin/control.html#MerlinControl.send_command_file"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#libertem_live.detectors.merlin.MerlinControl.send_command_file" title="Permalink to this definition">¶</a></dt>
+<dd><p>Send the contents of <code class="code docutils literal notranslate"><span class="pre">filename</span></code>, which should
+contain complete merlin command lines.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="libertem_live.detectors.merlin.MerlinControl.set">
+<code class="sig-name descname">set</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">param</span></em>, <em class="sig-param"><span class="n">value</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/libertem_live/detectors/merlin/control.html#MerlinControl.set"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#libertem_live.detectors.merlin.MerlinControl.set" title="Permalink to this definition">¶</a></dt>
+<dd><p>Send a SET command, and return the response</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt id="libertem_live.detectors.merlin.MerlinDataSource">
+<em class="property">class </em><code class="sig-prename descclassname">libertem_live.detectors.merlin.</code><code class="sig-name descname">MerlinDataSource</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">host</span></em>, <em class="sig-param"><span class="n">port</span></em>, <em class="sig-param"><span class="n">pool_size</span><span class="o">=</span><span class="default_value">2</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/libertem_live/detectors/merlin/data.html#MerlinDataSource"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#libertem_live.detectors.merlin.MerlinDataSource" title="Permalink to this definition">¶</a></dt>
+<dd><dl class="py method">
+<dt id="libertem_live.detectors.merlin.MerlinDataSource.inline_stream">
+<code class="sig-name descname">inline_stream</code><span class="sig-paren">(</span><em class="sig-param">read_dtype=&lt;class 'numpy.float32'&gt;</em>, <em class="sig-param">chunk_size=10</em><span class="sig-paren">)</span><a class="reference internal" href="_modules/libertem_live/detectors/merlin/data.html#MerlinDataSource.inline_stream"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#libertem_live.detectors.merlin.MerlinDataSource.inline_stream" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="libertem_live.detectors.merlin.MerlinDataSource.stream">
+<code class="sig-name descname">stream</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">num_frames</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">chunk_size</span><span class="o">=</span><span class="default_value">11</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/libertem_live/detectors/merlin/data.html#MerlinDataSource.stream"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#libertem_live.detectors.merlin.MerlinDataSource.stream" title="Permalink to this definition">¶</a></dt>
+<dd><p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">source</span> <span class="o">=</span> <span class="n">MerlinDataSource</span><span class="p">(</span><span class="o">...</span><span class="p">)</span>  
+<span class="gp">&gt;&gt;&gt; </span><span class="k">with</span> <span class="n">source</span><span class="p">:</span>  
+<span class="gp">... </span>    <span class="k">for</span> <span class="n">_</span> <span class="ow">in</span> <span class="n">source</span><span class="o">.</span><span class="n">stream</span><span class="p">():</span>  
+<span class="gp">... </span>        <span class="o">...</span>
+</pre></div>
+</div>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+<div class="section" id="module-libertem_live.detectors.memory">
+<span id="memory"></span><span id="memory-detector"></span><h3>Memory<a class="headerlink" href="#module-libertem_live.detectors.memory" title="Permalink to this headline">¶</a></h3>
+<dl class="py class">
+<dt id="libertem_live.detectors.memory.MemoryAcquisition">
+<em class="property">class </em><code class="sig-prename descclassname">libertem_live.detectors.memory.</code><code class="sig-name descname">MemoryAcquisition</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">trigger</span></em>, <em class="sig-param"><span class="o">*</span><span class="n">args</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/libertem_live/detectors/memory/acquisition.html#MemoryAcquisition"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#libertem_live.detectors.memory.MemoryAcquisition" title="Permalink to this definition">¶</a></dt>
+<dd><p>An acquisition based on memory</p>
+<p>Currently it just splices the additional functionality from
+<code class="xref py py-class docutils literal notranslate"><span class="pre">AcquisitionMixin</span></code> into the
+<a class="reference external" href="https://libertem.github.io/LiberTEM/reference/dataset.html#libertem.io.dataset.memory.MemoryDataSet" title="(in LiberTEM v0.8)"><code class="xref py py-class docutils literal notranslate"><span class="pre">MemoryDataSet</span></code></a> using multiple
+inheritance and implements a dummy for the <code class="xref py py-meth docutils literal notranslate"><span class="pre">acquire()</span></code> context manager.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>trigger</strong> (<em>function</em><em>(</em><em>)</em>) – See <a class="reference internal" href="#libertem_live.api.LiveContext.prepare_acquisition" title="libertem_live.api.LiveContext.prepare_acquisition"><code class="xref py py-meth docutils literal notranslate"><span class="pre">prepare_acquisition()</span></code></a>
+and <a class="reference internal" href="usage.html#trigger"><span class="std std-ref">Define a callback function to trigger an acquisition</span></a> for details!</p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">libertem.udf.sum</span> <span class="kn">import</span> <span class="n">SumUDF</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="kn">from</span> <span class="nn">libertem_live.api</span> <span class="kn">import</span> <span class="n">LiveContext</span>
+<span class="gp">...</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">ctx</span> <span class="o">=</span> <span class="n">LiveContext</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">random</span><span class="p">((</span><span class="mi">23</span><span class="p">,</span> <span class="mi">42</span><span class="p">,</span> <span class="mi">51</span><span class="p">,</span> <span class="mi">67</span><span class="p">))</span>
+<span class="gp">...</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="k">def</span> <span class="nf">trigger</span><span class="p">(</span><span class="n">acquisition</span><span class="p">):</span>
+<span class="gp">... </span>    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Triggering!&quot;</span><span class="p">)</span>
+<span class="gp">...</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">aq</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">prepare_acquisition</span><span class="p">(</span>
+<span class="gp">... </span>   <span class="s1">&#39;memory&#39;</span><span class="p">,</span>
+<span class="gp">... </span>   <span class="n">trigger</span><span class="o">=</span><span class="n">trigger</span><span class="p">,</span>
+<span class="gp">... </span>   <span class="n">data</span><span class="o">=</span><span class="n">data</span>
+<span class="gp">... </span><span class="p">)</span>
+<span class="gp">...</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">udf</span> <span class="o">=</span> <span class="n">SumUDF</span><span class="p">()</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">ctx</span><span class="o">.</span><span class="n">run_udf</span><span class="p">(</span><span class="n">dataset</span><span class="o">=</span><span class="n">aq</span><span class="p">,</span> <span class="n">udf</span><span class="o">=</span><span class="n">udf</span><span class="p">,</span> <span class="n">plots</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+<span class="go">Triggering!</span>
+<span class="go">{&#39;intensity&#39;: &lt;BufferWrapper kind=sig dtype=float64 extra_shape=()&gt;}</span>
+</pre></div>
+</div>
+<p class="rubric">Notes</p>
+<p>Other parameters are inherited from and passed
+to <a class="reference external" href="https://libertem.github.io/LiberTEM/reference/dataset.html#libertem.io.dataset.memory.MemoryDataSet" title="(in LiberTEM v0.8)"><code class="xref py py-class docutils literal notranslate"><span class="pre">MemoryDataSet</span></code></a>.</p>
+</dd></dl>
+
+</div>
+</div>
+<div class="section" id="module-libertem_live.udf.monitor">
+<span id="udfs"></span><h2>UDFs<a class="headerlink" href="#module-libertem_live.udf.monitor" title="Permalink to this headline">¶</a></h2>
+<dl class="py class">
+<dt id="libertem_live.udf.monitor.SignalMonitorUDF">
+<em class="property">class </em><code class="sig-prename descclassname">libertem_live.udf.monitor.</code><code class="sig-name descname">SignalMonitorUDF</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/libertem_live/udf/monitor.html#SignalMonitorUDF"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#libertem_live.udf.monitor.SignalMonitorUDF" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return the most recently processed signal space element (frame).</p>
+<p>This is useful for live processing as a beam monitor. Individual frames in
+an offline dataset are more easily accessible with
+<a class="reference external" href="https://libertem.github.io/LiberTEM/reference/udf.html#libertem.udf.raw.PickUDF" title="(in LiberTEM v0.8)"><code class="xref py py-class docutils literal notranslate"><span class="pre">PickUDF</span></code></a>.</p>
+<p>The result is most likely the last frame of each partition for the
+individual merge steps. The end result depends on the merge order.</p>
+<dl class="py method">
+<dt id="libertem_live.udf.monitor.SignalMonitorUDF.get_preferred_input_dtype">
+<code class="sig-name descname">get_preferred_input_dtype</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/libertem_live/udf/monitor.html#SignalMonitorUDF.get_preferred_input_dtype"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#libertem_live.udf.monitor.SignalMonitorUDF.get_preferred_input_dtype" title="Permalink to this definition">¶</a></dt>
+<dd><p>Override this method to specify the preferred input dtype of the UDF.</p>
+<p>The default is <code class="code docutils literal notranslate"><span class="pre">float32</span></code> since most numerical processing tasks
+perform best with this dtype, namely dot products.</p>
+<p>The back-end uses this preferred input dtype in combination with the
+dataset`s native dtype to determine the input dtype using
+<code class="xref py py-meth docutils literal notranslate"><span class="pre">numpy.result_type()</span></code>. That means <code class="code docutils literal notranslate"><span class="pre">float</span></code> data in a dataset
+switches the dtype to <code class="code docutils literal notranslate"><span class="pre">float</span></code> even if this method returns an
+<code class="code docutils literal notranslate"><span class="pre">int</span></code> dtype. <code class="code docutils literal notranslate"><span class="pre">int32</span></code> or wider input data would switch from
+<code class="code docutils literal notranslate"><span class="pre">float32</span></code> to <code class="code docutils literal notranslate"><span class="pre">float64</span></code>, and complex data in the dataset will
+switch the input dtype kind to <code class="code docutils literal notranslate"><span class="pre">complex</span></code>, following the NumPy
+casting rules.</p>
+<p>In case your UDF only works with specific input dtypes, it should throw
+an error or warning if incompatible dtypes are used, and/or implement a
+meaningful conversion in your UDF’s <code class="code docutils literal notranslate"><span class="pre">process_&lt;...&gt;</span></code> routine.</p>
+<p>If you prefer to always use the dataset’s native dtype instead of
+floats, you can override this method to return
+<code class="xref py py-attr docutils literal notranslate"><span class="pre">UDF.USE_NATIVE_DTYPE</span></code>, which is currently identical to
+<code class="code docutils literal notranslate"><span class="pre">numpy.bool</span></code> and behaves as a neutral element in
+<a class="reference external" href="https://numpy.org/doc/stable/reference/generated/numpy.result_type.html#numpy.result_type" title="(in NumPy v1.21)"><code class="xref py py-func docutils literal notranslate"><span class="pre">numpy.result_type()</span></code></a>.</p>
+<div class="versionadded">
+<p><span class="versionmodified added">New in version 0.4.0.</span></p>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt id="libertem_live.udf.monitor.SignalMonitorUDF.get_result_buffers">
+<code class="sig-name descname">get_result_buffers</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/libertem_live/udf/monitor.html#SignalMonitorUDF.get_result_buffers"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#libertem_live.udf.monitor.SignalMonitorUDF.get_result_buffers" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return result buffer declaration.</p>
+<p>Values of the returned dict should be <a class="reference external" href="https://libertem.github.io/LiberTEM/reference/udf.html#libertem.common.buffers.BufferWrapper" title="(in LiberTEM v0.8)"><code class="xref py py-class docutils literal notranslate"><span class="pre">BufferWrapper</span></code></a>
+instances, which, when accessed via <code class="code docutils literal notranslate"><span class="pre">self.results.key</span></code>,
+will automatically return a view corresponding to the
+current unit of data (frame, tile, partition).</p>
+<p>The values also need to be serializable via pickle.</p>
+<p>Data available in this method:</p>
+<ul class="simple">
+<li><p><code class="code docutils literal notranslate"><span class="pre">self.params</span></code> - the parameters of this UDF</p></li>
+<li><p><code class="code docutils literal notranslate"><span class="pre">self.meta</span></code> - relevant metadata, see <code class="xref py py-class docutils literal notranslate"><span class="pre">UDFMeta</span></code> documentation.
+Please note that partition metadata will not be set when this method is
+executed on the head node.</p></li>
+</ul>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>Flat dict with string keys. Keys should
+be valid python identifiers, which allows
+access via <cite>self.results.the_key_here</cite>.</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><a class="reference external" href="https://docs.python.org/3.7/library/stdtypes.html#dict" title="(in Python v3.7)">dict</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="libertem_live.udf.monitor.SignalMonitorUDF.merge">
+<code class="sig-name descname">merge</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">dest</span></em>, <em class="sig-param"><span class="n">src</span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/libertem_live/udf/monitor.html#SignalMonitorUDF.merge"><span class="viewcode-link">[source]</span></a><a class="headerlink" href="#libertem_live.udf.monitor.SignalMonitorUDF.merge" title="Permalink to this definition">¶</a></dt>
+<dd><p>Merge a partial result <cite>src</cite> into the current global result <cite>dest</cite>.</p>
+<p>Data available in this method:</p>
+<ul class="simple">
+<li><p><cite>self.params</cite> - the parameters of this UDF</p></li>
+</ul>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>dest</strong> – global results; you can access the ndarrays for each
+buffer name (from <cite>get_result_buffers</cite>) by attribute access
+(<code class="code docutils literal notranslate"><span class="pre">dest.your_buffer_name</span></code>)</p></li>
+<li><p><strong>src</strong> – results for a partition; you can access the ndarrays for each
+buffer name (from <cite>get_result_buffers</cite>) by attribute access
+(<code class="code docutils literal notranslate"><span class="pre">src.your_buffer_name</span></code>)</p></li>
+</ul>
+</dd>
+</dl>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>This function is running on the main node, which means <cite>self.results</cite>
+and <cite>self.task_data</cite> are not available.</p>
+</div>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<p class="logo">
+  <a href="index.html">
+    <img class="logo" src="_static/logo.png" alt="Logo"/>
+    
+  </a>
+</p>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="usage.html">Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="changelog.html">Changelog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="acknowledgments.html">Acknowledgments</a></li>
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Reference</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#module-libertem_live.api">Live Context</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#detectors">Detectors</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#module-libertem_live.udf.monitor">UDFs</a></li>
+</ul>
+</li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="acknowledgments.html" title="previous chapter">Acknowledgments</a></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;LiberTEM-live Authors.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.4.3</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="_sources/reference.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

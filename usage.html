@@ -1,0 +1,264 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Usage &#8212; LiberTEM-live 0.2.0.dev0 documentation</title>
+    <link rel="stylesheet" href="_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" href="_static/alabaster.css" type="text/css" />
+    <script id="documentation_options" data-url_root="./" src="_static/documentation_options.js"></script>
+    <script src="_static/jquery.js"></script>
+    <script src="_static/underscore.js"></script>
+    <script src="_static/doctools.js"></script>
+    <script crossorigin="anonymous" integrity="sha256-Ae2Vz/4ePdIu6ZyI/5ZGsYnb+m0JlOmKPjt6XZ9JJkA=" src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.4/require.min.js"></script>
+    <script async="async" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.7/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <script type="text/x-mathjax-config">MathJax.Hub.Config({"tex2jax": {"inlineMath": [["$", "$"], ["\\(", "\\)"]], "processEscapes": true, "ignoreClass": "document", "processClass": "math|output_area"}})</script>
+    <link rel="shortcut icon" href="_static/favicon.ico"/>
+    <link rel="index" title="Index" href="genindex.html" />
+    <link rel="search" title="Search" href="search.html" />
+    <link rel="next" title="Run UDFs on Merlin live streams" href="merlin.html" />
+    <link rel="prev" title="LiberTEM-live" href="index.html" />
+   
+  <link rel="stylesheet" href="_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="usage">
+<span id="id1"></span><h1>Usage<a class="headerlink" href="#usage" title="Permalink to this headline">¶</a></h1>
+<p>Currently, LiberTEM-live can be used within Jupyter notebooks or other
+applications that allow Python scripting. Support for live data processing in
+the web GUI is not implemented at this time.</p>
+<p>Usage is deliberately similar to the LiberTEM <a class="reference external" href="https://libertem.github.io/LiberTEM/api.html#api-documentation" title="(in LiberTEM v0.8)"><span>Python API</span></a>.
+It differs in only a few aspects:</p>
+<ul class="simple">
+<li><p>It uses the <a class="reference internal" href="reference.html#libertem_live.api.LiveContext" title="libertem_live.api.LiveContext"><code class="xref py py-class docutils literal notranslate"><span class="pre">libertem_live.api.LiveContext</span></code></a> that extends the
+<a class="reference external" href="https://libertem.github.io/LiberTEM/reference/api.html#libertem.api.Context" title="(in LiberTEM v0.8)"><code class="xref py py-class docutils literal notranslate"><span class="pre">libertem.api.Context</span></code></a> with methods to prepare and run live
+acquisitions on top of loading offline datasets.</p></li>
+<li><p>The concept of a LiberTEM <a class="reference external" href="https://libertem.github.io/LiberTEM/reference/dataset.html#libertem.io.dataset.base.DataSet" title="(in LiberTEM v0.8)"><code class="xref py py-class docutils literal notranslate"><span class="pre">DataSet</span></code></a> is
+adapted to acquiring data from a detector instead of reading
+from a file.</p></li>
+</ul>
+<div class="section" id="simulating-a-detector">
+<h2>Simulating a detector<a class="headerlink" href="#simulating-a-detector" title="Permalink to this headline">¶</a></h2>
+<p>For basic testing, the
+<a class="reference internal" href="reference.html#libertem_live.detectors.memory.MemoryAcquisition" title="libertem_live.detectors.memory.MemoryAcquisition"><code class="xref py py-class docutils literal notranslate"><span class="pre">MemoryAcquisition</span></code></a> can be used. It
+implements the additional functionality of an acquisition on top of the
+<a class="reference external" href="https://libertem.github.io/LiberTEM/reference/dataset.html#libertem.io.dataset.memory.MemoryDataSet" title="(in LiberTEM v0.8)"><code class="xref py py-class docutils literal notranslate"><span class="pre">libertem.io.dataset.memory.MemoryDataSet</span></code></a>. A more advanced data source
+that emulates the Merlin data and control socket is available as well. Please
+note that this emulation is still very basic for the time being.</p>
+<p>This command runs an emulation server on the default ports 6341 for control and
+6342 for data which replays the provided MIB dataset:</p>
+<div class="highlight-shell notranslate"><div class="highlight"><pre><span></span><span class="o">(</span>libertem<span class="o">)</span> $ libertem-live-mib-sim <span class="s2">&quot;Ptycho01/20200518 165148/default.hdr&quot;</span>
+</pre></div>
+</div>
+<p>See <a class="reference internal" href="reference.html#merlin-detector"><span class="std std-ref">Quantum Detectors Merlin</span></a> for all available command line arguments. For
+running the example notebooks, you need to use at least the
+<code class="code docutils literal notranslate"><span class="pre">--wait-trigger</span></code> parameter.</p>
+</div>
+<div class="section" id="start-a-livecontext">
+<h2>Start a <code class="code docutils literal notranslate"><span class="pre">LiveContext</span></code><a class="headerlink" href="#start-a-livecontext" title="Permalink to this headline">¶</a></h2>
+<p>A <a class="reference internal" href="reference.html#libertem_live.api.LiveContext" title="libertem_live.api.LiveContext"><code class="xref py py-class docutils literal notranslate"><span class="pre">LiveContext</span></code></a> requires using a compatible executor
+since task scheduling has to be coordinated with the incoming detector data. It
+starts a suitable executor by default when it is instantiated, currently the
+<code class="xref py py-class docutils literal notranslate"><span class="pre">InlineJobExecutor</span></code>.</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">libertem_live.api</span> <span class="kn">import</span> <span class="n">LiveContext</span>
+
+<span class="n">ctx</span> <span class="o">=</span> <span class="n">LiveContext</span><span class="p">()</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="define-a-callback-function-to-trigger-an-acquisition">
+<span id="trigger"></span><h2>Define a callback function to trigger an acquisition<a class="headerlink" href="#define-a-callback-function-to-trigger-an-acquisition" title="Permalink to this headline">¶</a></h2>
+<p>This callback function will be included in an acquisition object to be called
+when LiberTEM-live is ready and waiting for data. It should trigger the start of
+the acquisition, for example by starting a scan. If a scan is triggered before
+the acquisition system is ready to receive, data may be lost depending on the
+timimg and architecture.</p>
+<p>Setting up the devices before the scan with a configuration that generates the
+expected data as well as cleanup after a scan is finished should be handled by
+the user.</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="k">def</span> <span class="nf">trigger</span><span class="p">(</span><span class="n">acquisition</span><span class="p">):</span>
+    <span class="nb">print</span><span class="p">(</span><span class="s2">&quot;Triggering!&quot;</span><span class="p">)</span>
+    <span class="n">height</span><span class="p">,</span> <span class="n">width</span> <span class="o">=</span> <span class="n">acquisition</span><span class="o">.</span><span class="n">shape</span><span class="o">.</span><span class="n">nav</span>
+    <span class="c1"># microscope.trigger_scan()</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="prepare-an-acquisition">
+<h2>Prepare an acquisition<a class="headerlink" href="#prepare-an-acquisition" title="Permalink to this headline">¶</a></h2>
+<p>The API of an acquisition is deliberately similar to a LiberTEM offline
+<a class="reference external" href="https://libertem.github.io/LiberTEM/reference/dataset.html#libertem.io.dataset.base.DataSet" title="(in LiberTEM v0.8)"><code class="xref py py-class docutils literal notranslate"><span class="pre">DataSet</span></code></a> to make the internals of
+LiberTEM work the same. However, the behavior and usage are different. An
+offline dataset represents immutable data on a storage medium that can be
+accessed at any time and be shared between all processes that have access to the
+underlying file system. As a consequence,
+<a class="reference external" href="https://libertem.github.io/LiberTEM/reference/dataset.html#libertem.io.dataset.base.DataSet" title="(in LiberTEM v0.8)"><code class="xref py py-class docutils literal notranslate"><span class="pre">DataSet</span></code></a> objects can be long-lived and
+re-used easily.</p>
+<p><code class="xref py py-class docutils literal notranslate"><span class="pre">AcquisitionMixin</span></code> objects, in
+contrast, are just a vehicle to communicate to the LiberTEM internals what data
+to expect. What data will actually arrive depends entirely on the settings of
+the acquisition system. Since doing a 4D STEM acquisition requires coordinating
+at least camera, scan engine and microscope, it is usually customized for each
+setup. Furthermore, interactive user adjustments such as focusing and navigating
+are usually required. That makes generalizing a live acquisition harder than an
+offline dataset: It doesn’t represent an immutable state on storage like an
+offline dataset, but a desired action of an acquisition system that usually has
+a unique configuration and depends on a state that is dynamic, complex and
+diverse in nature.</p>
+<p>For that reason, the functionality of a
+<code class="xref py py-class docutils literal notranslate"><span class="pre">AcquisitionMixin</span></code> object is
+strictly limited to reading data from the camera, expecting data in the shape
+and kind that was specified. Controlling the settings of the acquisition system
+is the responsibility of the user. The example notebook uses a convenience
+function that accepts an acquisition object as a parameter and adjusts the
+settings of the acquisition system to match the scan shape of the acquisition.
+This function is called directly before running an acquisition, together with
+other setup functions.</p>
+<p>This example just creates a memory acquisition:</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">numpy</span> <span class="k">as</span> <span class="nn">np</span>
+
+<span class="c1"># We use a memory-based acquisition to make this example runnable</span>
+<span class="c1"># without a real detector or detector simulation.</span>
+<span class="n">data</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">random</span><span class="o">.</span><span class="n">random</span><span class="p">((</span><span class="mi">23</span><span class="p">,</span> <span class="mi">42</span><span class="p">,</span> <span class="mi">51</span><span class="p">,</span> <span class="mi">67</span><span class="p">))</span>
+
+<span class="n">aq</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">prepare_acquisition</span><span class="p">(</span>
+    <span class="s1">&#39;memory&#39;</span><span class="p">,</span>
+    <span class="n">trigger</span><span class="o">=</span><span class="n">trigger</span><span class="p">,</span>
+    <span class="n">data</span><span class="o">=</span><span class="n">data</span><span class="p">,</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+</div>
+<div class="section" id="run-an-acquisition">
+<h2>Run an acquisition<a class="headerlink" href="#run-an-acquisition" title="Permalink to this headline">¶</a></h2>
+<p>This first initializes the acquisition to the point that it can receive data, for
+example by connecting to the data socket in the case of the Merlin detector. Then it
+calls the user-provided <code class="code docutils literal notranslate"><span class="pre">trigger</span></code> callback function that should set off
+the acquisition. After that, it reads the data from the camera and feeds it into
+the provided UDFs. Finally, it closes the camera connection, if applicable.</p>
+<div class="highlight-python3 notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span> <span class="nn">libertem_live.udf.monitor</span> <span class="kn">import</span> <span class="n">SignalMonitorUDF</span>
+
+<span class="n">res</span> <span class="o">=</span> <span class="n">ctx</span><span class="o">.</span><span class="n">run_udf</span><span class="p">(</span><span class="n">dataset</span><span class="o">=</span><span class="n">aq</span><span class="p">,</span> <span class="n">udf</span><span class="o">=</span><span class="n">SignalMonitorUDF</span><span class="p">(),</span> <span class="n">plots</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="highlight-none notranslate"><div class="highlight"><pre><span></span>Triggering!
+</pre></div>
+</div>
+</div>
+<div class="section" id="examples">
+<h2>Examples<a class="headerlink" href="#examples" title="Permalink to this headline">¶</a></h2>
+<p>This example is closer to a real-world application based on the Merlin
+simulator:</p>
+<div class="toctree-wrapper compound">
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="merlin.html">Run UDFs on Merlin live streams</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="merlin.html#Camera-setup-routines">Camera setup routines</a></li>
+<li class="toctree-l2"><a class="reference internal" href="merlin.html#Trigger-function">Trigger function</a></li>
+<li class="toctree-l2"><a class="reference internal" href="merlin.html#Sample-output">Sample output</a></li>
+<li class="toctree-l2"><a class="reference internal" href="merlin.html#Run-one-scan">Run one scan</a></li>
+</ul>
+</li>
+</ul>
+</div>
+</div>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<p class="logo">
+  <a href="index.html">
+    <img class="logo" src="_static/logo.png" alt="Logo"/>
+    
+  </a>
+</p>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1 current"><a class="current reference internal" href="#">Usage</a><ul>
+<li class="toctree-l2"><a class="reference internal" href="#simulating-a-detector">Simulating a detector</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#start-a-livecontext">Start a <code class="code docutils literal notranslate"><span class="pre">LiveContext</span></code></a></li>
+<li class="toctree-l2"><a class="reference internal" href="#define-a-callback-function-to-trigger-an-acquisition">Define a callback function to trigger an acquisition</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#prepare-an-acquisition">Prepare an acquisition</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#run-an-acquisition">Run an acquisition</a></li>
+<li class="toctree-l2"><a class="reference internal" href="#examples">Examples</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="changelog.html">Changelog</a></li>
+<li class="toctree-l1"><a class="reference internal" href="acknowledgments.html">Acknowledgments</a></li>
+<li class="toctree-l1"><a class="reference internal" href="reference.html">Reference</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="index.html">Documentation overview</a><ul>
+      <li>Previous: <a href="index.html" title="previous chapter">LiberTEM-live</a></li>
+      <li>Next: <a href="merlin.html" title="next chapter">Run UDFs on Merlin live streams</a></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;LiberTEM-live Authors.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.4.3</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="_sources/usage.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
