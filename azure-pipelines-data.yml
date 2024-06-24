@@ -8,13 +8,6 @@ variables:
   - name: tox_dir
     value: $(Build.Repository.LocalPath)/.tox
 
-resources:
-  repositories:
-    - repository: LiberTEM
-      type: github
-      endpoint: LiberTEM
-      name: matbryan52/LiberTEM
-
 parameters:
   # by default, the tox environment is kept around, so we need this parameter
   # as a way to manually re-create it, in case dependencies change.
@@ -64,46 +57,6 @@ stages:
         inputs:
           testResultsFiles: 'junit.xml'
           testRunTitle: 'Publish test results for Python $(python.version)'
-
-    - job: libertem_master_integration
-      pool: DataAccess
-      variables:
-        TESTDATA_BASE_PATH: '/data/'
-      steps:
-      - bash: find /data/
-        displayName: 'list available data'
-
-      - checkout: self
-      - checkout: LiberTEM
-
-      - task: UsePythonVersion@0
-        displayName: 'Use Python 3.11'
-        inputs:
-          versionSpec: '3.11'
-
-      - bash: python3.11 -m venv $(Agent.TempDirectory)/venv
-        displayName: 'create venv'
-
-      - bash: $(Agent.TempDirectory)/venv/bin/pip install uv
-        displayName: 'install uv'
-
-      - bash: source $(Agent.TempDirectory)/venv/bin/activate && $(Agent.TempDirectory)/venv/bin/uv pip install $(Build.SourcesDirectory)/LiberTEM/
-        displayName: 'install LiberTEM'
-
-      - bash: source $(Agent.TempDirectory)/venv/bin/activate && $(Agent.TempDirectory)/venv/bin/uv pip install $(Build.SourcesDirectory)/LiberTEM-live/
-        displayName: 'install LiberTEM-live'
-
-      - bash: source $(Agent.TempDirectory)/venv/bin/activate && $(Agent.TempDirectory)/venv/bin/uv pip install -r $(Build.SourcesDirectory)/LiberTEM-live/test_requirements.txt
-        displayName: 'install LiberTEM-live test requirements'
-
-      - bash: cd $(Build.SourcesDirectory)/LiberTEM-live/ && $(Agent.TempDirectory)/venv/bin/pytest --durations=10 --cov=libertem_live --cov-report=term --cov-report=html --cov-report=xml --cov-config=setup.cfg --junitxml=junit.xml tests/
-        displayName: 'run LiberTEM-live tests'
-
-      - bash: cd $(Build.SourcesDirectory)/LiberTEM-live/ && ./scripts/codecov.sh -f ./coverage.xml
-        displayName: 'Submit coverage to codecov.io'
-        ${{ if and(not(eq(variables['Build.Reason'], 'PullRequest')), eq(variables['Build.SourceBranch'], 'refs/heads/master')) }}:
-          env:
-            CODECOV_TOKEN: $(CODECOV_TOKEN)
 
     - job: data_tests
       pool: DataAccess
