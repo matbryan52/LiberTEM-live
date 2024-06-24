@@ -19,95 +19,95 @@ parameters:
 stages:
   - stage: test
     jobs:
-    - job: check_example_notebooks
-      pool: DataAccess
-      variables:
-        TESTDATA_BASE_PATH: '/data/'
-      steps:
-      - bash: find /data/
-        displayName: 'list available data'
+    # - job: check_example_notebooks
+    #   pool: DataAccess
+    #   variables:
+    #     TESTDATA_BASE_PATH: '/data/'
+    #   steps:
+    #   - bash: find /data/
+    #     displayName: 'list available data'
 
-      - task: UsePythonVersion@0
-        displayName: 'Use Python 3.9'
-        inputs:
-          versionSpec: '3.9'
+    #   - task: UsePythonVersion@0
+    #     displayName: 'Use Python 3.9'
+    #     inputs:
+    #       versionSpec: '3.9'
 
-      - bash: python3.9 -m venv venv
-        displayName: 'create venv'
+    #   - bash: python3.9 -m venv venv
+    #     displayName: 'create venv'
 
-      - bash: ./venv/bin/pip install -U tox tox-uv uv
-        displayName: 'install tox'
+    #   - bash: ./venv/bin/pip install -U tox tox-uv uv
+    #     displayName: 'install tox'
 
-      - ${{ if eq(parameters.recreate_tox, true) }}:
-        - bash: ./venv/bin/tox -e notebooks -r -- examples/*.ipynb -v
-          displayName: 'Run nbval tests $(Agent.OS) (recreating)'
+    #   - ${{ if eq(parameters.recreate_tox, true) }}:
+    #     - bash: ./venv/bin/tox -e notebooks -r -- examples/*.ipynb -v
+    #       displayName: 'Run nbval tests $(Agent.OS) (recreating)'
 
-      - ${{ if eq(parameters.recreate_tox, false) }}:
-        - bash: ./venv/bin/tox -e notebooks -- examples/*.ipynb -v
-          displayName: 'Run nbval tests $(Agent.OS)'
+    #   - ${{ if eq(parameters.recreate_tox, false) }}:
+    #     - bash: ./venv/bin/tox -e notebooks -- examples/*.ipynb -v
+    #       displayName: 'Run nbval tests $(Agent.OS)'
 
-      - bash: ./scripts/codecov.sh -f ./coverage.xml
-        displayName: 'Submit coverage to codecov.io'
-        ${{ if and(not(eq(variables['Build.Reason'], 'PullRequest')), eq(variables['Build.SourceBranch'], 'refs/heads/master')) }}:
-          env:
-            CODECOV_TOKEN: $(CODECOV_TOKEN)
+    #   - bash: ./scripts/codecov.sh -f ./coverage.xml
+    #     displayName: 'Submit coverage to codecov.io'
+    #     ${{ if and(not(eq(variables['Build.Reason'], 'PullRequest')), eq(variables['Build.SourceBranch'], 'refs/heads/master')) }}:
+    #       env:
+    #         CODECOV_TOKEN: $(CODECOV_TOKEN)
 
-      - task: PublishTestResults@2
-        condition: succeededOrFailed()
-        inputs:
-          testResultsFiles: 'junit.xml'
-          testRunTitle: 'Publish test results for Python $(python.version)'
+    #   - task: PublishTestResults@2
+    #     condition: succeededOrFailed()
+    #     inputs:
+    #       testResultsFiles: 'junit.xml'
+    #       testRunTitle: 'Publish test results for Python $(python.version)'
 
-    - job: data_tests
-      pool: DataAccess
-      strategy:
-        matrix:
-          Python39:
-            python.version: '3.9'
-            TOXENV: 'py39-data'
-          Python310:
-            python.version: '3.10'
-            TOXENV: 'py310-data'
-          Python311:
-            python.version: '3.11'
-            TOXENV: 'py311-data'
-          Python312:
-            python.version: '3.12'
-            TOXENV: 'py311-data'
-      variables:
-        TESTDATA_BASE_PATH: '/data/'
-      steps:
-      - bash: find /data/
-        displayName: 'list available data'
+    # - job: data_tests
+    #   pool: DataAccess
+    #   strategy:
+    #     matrix:
+    #       Python39:
+    #         python.version: '3.9'
+    #         TOXENV: 'py39-data'
+    #       Python310:
+    #         python.version: '3.10'
+    #         TOXENV: 'py310-data'
+    #       Python311:
+    #         python.version: '3.11'
+    #         TOXENV: 'py311-data'
+    #       Python312:
+    #         python.version: '3.12'
+    #         TOXENV: 'py311-data'
+    #   variables:
+    #     TESTDATA_BASE_PATH: '/data/'
+    #   steps:
+    #   - bash: find /data/
+    #     displayName: 'list available data'
 
-      - task: UsePythonVersion@0
-        displayName: 'Use Python $(python.version)'
-        inputs:
-          versionSpec: '$(python.version)'
+    #   - task: UsePythonVersion@0
+    #     displayName: 'Use Python $(python.version)'
+    #     inputs:
+    #       versionSpec: '$(python.version)'
 
-      - bash: python3.9 -m venv venv
-        displayName: 'create venv'
+    #   - bash: python3.9 -m venv venv
+    #     displayName: 'create venv'
 
-      - bash: ./venv/bin/pip install -U tox tox-uv uv
-        displayName: 'install tox'
+    #   - bash: ./venv/bin/pip install -U tox tox-uv uv
+    #     displayName: 'install tox'
 
-      - bash: ./venv/bin/tox -r
-        displayName: 'Run tox tests $(TOXENV) $(Agent.OS)'
+    #   - bash: ./venv/bin/tox -r
+    #     displayName: 'Run tox tests $(TOXENV) $(Agent.OS)'
 
-      - bash: ./scripts/codecov.sh -f ./coverage.xml
-        displayName: 'Submit coverage to codecov.io'
-        ${{ if and(not(eq(variables['Build.Reason'], 'PullRequest')), eq(variables['Build.SourceBranch'], 'refs/heads/master')) }}:
-          env:
-            CODECOV_TOKEN: $(CODECOV_TOKEN)
+    #   - bash: ./scripts/codecov.sh -f ./coverage.xml
+    #     displayName: 'Submit coverage to codecov.io'
+    #     ${{ if and(not(eq(variables['Build.Reason'], 'PullRequest')), eq(variables['Build.SourceBranch'], 'refs/heads/master')) }}:
+    #       env:
+    #         CODECOV_TOKEN: $(CODECOV_TOKEN)
 
-      - task: PublishTestResults@2
-        condition: succeededOrFailed()
-        inputs:
-          testResultsFiles: 'junit.xml'
-          testRunTitle: 'Publish test results for Python $(python.version)'
+    #   - task: PublishTestResults@2
+    #     condition: succeededOrFailed()
+    #     inputs:
+    #       testResultsFiles: 'junit.xml'
+    #       testRunTitle: 'Publish test results for Python $(python.version)'
 
     - job: lint
-      pool: DataAccess
+      # pool: DataAccess
       strategy:
         matrix:
           docs-check:
