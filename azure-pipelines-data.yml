@@ -13,7 +13,7 @@ resources:
     - repository: LiberTEM
       type: github
       endpoint: LiberTEM
-      name: LiberTEM/LiberTEM
+      name: matbryan52/LiberTEM
 
 parameters:
   # by default, the tox environment is kept around, so we need this parameter
