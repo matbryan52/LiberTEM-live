@@ -1,12 +1,12 @@
-variables:
-  - group: Packaging
-  - group: Coverage
-  - name: PIP_CACHE_DIR
-    value: $(Pipeline.Workspace)/.pip
-  - name: npm_config_cache
-    value: $(Pipeline.Workspace)/.npm
-  - name: tox_dir
-    value: $(Build.Repository.LocalPath)/.tox
+# variables:
+#   - group: Packaging
+#   - group: Coverage
+#   - name: PIP_CACHE_DIR
+#     value: $(Pipeline.Workspace)/.pip
+#   - name: npm_config_cache
+#     value: $(Pipeline.Workspace)/.npm
+#   - name: tox_dir
+#     value: $(Build.Repository.LocalPath)/.tox
 
 parameters:
   # by default, the tox environment is kept around, so we need this parameter
